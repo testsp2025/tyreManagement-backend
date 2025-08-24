@@ -1,0 +1,6 @@
+ALTER TABLE requests
+ADD COLUMN supplierName VARCHAR(255),
+ADD COLUMN supplierEmail VARCHAR(255),
+ADD COLUMN supplierPhone VARCHAR(255),
+ADD COLUMN orderNumber VARCHAR(255),
+ADD COLUMN orderNotes TEXT;
