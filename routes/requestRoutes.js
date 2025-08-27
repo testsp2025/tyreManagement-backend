@@ -53,4 +53,7 @@ router.delete("/:id", requestController.deleteRequest);
 // Get requests by vehicle number
 router.get("/vehicle/:vehicleNumber", requestController.getRequestsByVehicleNumber);
 
+// Get receipt for an order
+router.get("/:orderId/receipt", requestController.getReceiptByOrder);
+
 module.exports = router;

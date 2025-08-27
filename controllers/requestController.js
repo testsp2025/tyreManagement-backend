@@ -887,7 +887,60 @@ exports.getRequestsByVehicleNumber = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error processing your request',
-      error: error.message, // Always include the error message for debugging
+      error: error.message,
     });
+  }
+};
+
+// New endpoint to get receipt by order ID
+exports.getReceiptByOrder = async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    const { ReceiptModel } = require('../models/Receipt');
+
+    // Find receipt by order ID
+    const receipt = await ReceiptModel.findOne({
+      where: { order_id: orderId }
+    });
+
+    if (!receipt) {
+      return res.status(404).json({ error: 'Receipt not found' });
+    }
+
+    // Format the receipt data for frontend
+    const formattedReceipt = {
+      id: receipt.id.toString(),
+      orderId: receipt.order_id.toString(),
+      requestId: receipt.request_id,
+      receiptNumber: receipt.receipt_number,
+      dateGenerated: receipt.date_generated,
+      totalAmount: receipt.total_amount,
+      customerOfficerId: receipt.customer_officer_id,
+      customerOfficerName: receipt.customer_officer_name,
+      vehicleNumber: receipt.vehicle_number,
+      vehicleBrand: receipt.vehicle_brand,
+      vehicleModel: receipt.vehicle_model,
+      supplierDetails: receipt.supplier_details,
+      items: receipt.items,
+      subtotal: receipt.subtotal,
+      tax: receipt.tax,
+      discount: receipt.discount,
+      paymentMethod: receipt.payment_method,
+      paymentStatus: receipt.payment_status,
+      notes: receipt.notes,
+      companyDetails: {
+        name: 'CPC Tire Management',
+        address: '123 Corporate Drive, Colombo',
+        phone: '+94 11 234 5678',
+        email: 'tiremanagement@cpc.lk',
+        website: 'https://www.cpc.lk',
+        logo: '/company-logo.png'
+      }
+    };
+
+    res.json(formattedReceipt);
+  } catch (error) {
+    console.error('Error fetching receipt:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
