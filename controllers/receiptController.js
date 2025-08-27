@@ -1,6 +1,33 @@
 const { ReceiptModel } = require('../models/Receipt');
 const Request = require('../models/Request');
 
+// Helper function to format receipt response
+const formatReceiptResponse = (receipt) => {
+    return {
+        id: receipt.id.toString(),
+        orderId: receipt.order_id.toString(),
+        requestId: receipt.request_id.toString(),
+        receiptNumber: receipt.receipt_number || '',
+        dateGenerated: receipt.date_generated || new Date(),
+        totalAmount: Number(receipt.total_amount || 0),
+        customerOfficerId: receipt.customer_officer_id || '',
+        customerOfficerName: receipt.customer_officer_name || '',
+        vehicleNumber: receipt.vehicle_number || '',
+        vehicleBrand: receipt.vehicle_brand || '',
+        vehicleModel: receipt.vehicle_model || '',
+        supplierName: receipt.supplier_name || '',
+        supplierEmail: receipt.supplier_email || '',
+        supplierPhone: receipt.supplier_phone || '',
+        items: receipt.items || [],
+        notes: receipt.notes || '',
+        submittedDate: receipt.submitted_date || null,
+        orderPlacedDate: receipt.order_placed_date || null,
+        orderNumber: receipt.order_number || '',
+        createdAt: receipt.created_at,
+        updatedAt: receipt.updated_at
+    };
+};
+
 exports.createReceipt = async (req, res) => {
     try {
         const { order_id } = req.body;
@@ -130,22 +157,8 @@ exports.getReceiptByOrderId = async (req, res) => {
             return res.status(404).json({ message: 'Related request not found' });
         }
 
-        // Format receipt data for frontend
-        const formattedReceipt = {
-            id: receipt.id.toString(),
-            orderId: receipt.order_id.toString(),
-            requestId: receipt.request_id.toString(),
-            receiptNumber: receipt.receipt_number,
-            dateGenerated: receipt.date_generated,
-            totalAmount: Number(receipt.total_amount),
-            customerOfficerId: receipt.customer_officer_id || '',
-            customerOfficerName: receipt.customer_officer_name || '',
-            vehicleNumber: receipt.vehicle_number,
-            vehicleBrand: receipt.vehicle_brand,
-            vehicleModel: receipt.vehicle_model,
-            supplierName: receipt.supplier_name,
-            supplierEmail: receipt.supplier_email,
-            supplierPhone: receipt.supplier_phone,
+        // Format receipt data for frontend with all fields
+        const formattedReceipt = formatReceiptResponse(receipt);
             items: receipt.items || [],
             notes: receipt.notes || '',
             submittedDate: receipt.submitted_date,
