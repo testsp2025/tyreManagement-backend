@@ -47,7 +47,8 @@ exports.createReceipt = async (req, res) => {
             }],
             notes: order.customer_officer_note,
             submitted_date: order.submittedAt,
-            order_placed_date: order.orderPlacedDate
+            order_placed_date: order.orderPlacedDate,
+            order_number: order.orderNumber
         });
 
         res.status(201).json(receipt);
@@ -122,6 +123,7 @@ exports.getReceiptByOrderId = async (req, res) => {
             notes: request.customer_officer_note || '',
             submittedDate: request.submittedAt,
             orderPlacedDate: request.orderPlacedDate,
+            orderNumber: request.orderNumber,
             companyDetails: {
                 name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',

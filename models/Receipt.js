@@ -80,6 +80,10 @@ const ReceiptModel = sequelize.define('Receipt', {
   order_placed_date: {
     type: DataTypes.DATE,
     allowNull: true,
+  },
+  order_number: {
+    type: DataTypes.STRING(50),
+    allowNull: true
   }
 }, {
   tableName: 'receipts',
