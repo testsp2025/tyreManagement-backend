@@ -703,22 +703,6 @@ exports.placeOrder = async (req, res) => {
     }
 
     console.log("Order placed successfully:", emailResult);
-    // Try to generate a receipt record for this order
-    try {
-      const receiptController = require("./receiptController");
-      // Call the generator with the request id as orderId (receiptController will look up request)
-      const fakeReq = { params: { orderId: id } };
-      // We create a small wrapper to capture the response instead of using res
-      const fakeRes = {
-        json: (body) => {
-          console.log('Receipt generated:', body && body.receipt ? body.receipt.id : 'unknown');
-        },
-        status: (code) => ({ json: (body) => console.log('Receipt gen status', code, body) })
-      };
-      await receiptController.generateReceipt(fakeReq, fakeRes);
-    } catch (rcErr) {
-      console.error('Failed to generate receipt:', rcErr);
-    }
 
     res.json({
       message: "Order placed successfully",
