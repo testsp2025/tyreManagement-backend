@@ -37,14 +37,14 @@ function formatReceiptResponse(receipt) {
         receiptNumber: receipt.receipt_number || `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
         dateGenerated: receipt.date_generated || new Date(),
         totalAmount: Number(receipt.total_amount || 0),
-        customerOfficerId: receipt.customer_officer_id || 'N/A',
-        customerOfficerName: receipt.customer_officer_name || 'N/A',
-        vehicleNumber: receipt.vehicle_number || 'N/A',
-        vehicleBrand: receipt.vehicle_brand || 'N/A',
-        vehicleModel: receipt.vehicle_model || 'N/A',
-        supplierName: receipt.supplier_name || 'N/A',
-        supplierEmail: receipt.supplier_email || 'N/A',
-        supplierPhone: receipt.supplier_phone || 'N/A',
+        customerOfficerId: receipt.customer_officer_id || '',
+        customerOfficerName: receipt.customer_officer_name || '',
+        vehicleNumber: receipt.vehicle_number || '',
+        vehicleBrand: receipt.vehicle_brand || '',
+        vehicleModel: receipt.vehicle_model || '',
+        supplierName: receipt.supplier_name || '',
+        supplierEmail: receipt.supplier_email || '',
+        supplierPhone: receipt.supplier_phone || '',
         items: Array.isArray(receipt.items) ? receipt.items.map(item => ({
             ...item,
             description: item.description || `${item.itemDetails?.tireSize || ''} Tires`,
@@ -176,7 +176,30 @@ exports.getReceipt = async (req, res) => {
 
 exports.getReceiptByOrderId = async (req, res) => {
     try {
-        // Find receipt with eager loading of all related data
+        // First get the request details since it has most of the information we need
+        const request = await Request.findOne({
+            where: { id: req.params.orderId },
+            include: [
+                {
+                    model: require('../models/User').User,
+                    as: 'user'
+                },
+                {
+                    model: require('../models/Supplier').Supplier,
+                    as: 'supplier'
+                },
+                {
+                    model: require('../models/Vehicle').Vehicle,
+                    as: 'vehicle'
+                }
+            ]
+        });
+
+        if (!request) {
+            return res.status(404).json({ message: 'Request not found' });
+        }
+
+        // Then get the receipt if it exists
         const receipt = await ReceiptModel.findOne({
             where: { order_id: req.params.orderId }
         });
@@ -185,59 +208,52 @@ exports.getReceiptByOrderId = async (req, res) => {
             return res.status(404).json({ message: 'Receipt not found' });
         }
 
-        // Get the related request with all necessary associations
-        const request = await Request.findByPk(receipt.order_id, {
-            include: [
-                {
-                    model: require('../models/User').User,
-                    as: 'user',
-                    attributes: ['id', 'name', 'email']
-                },
-                {
-                    model: require('../models/Supplier').Supplier,
-                    as: 'supplier',
-                    attributes: ['id', 'name', 'email', 'phone']
-                },
-                {
-                    model: require('../models/Vehicle').Vehicle,
-                    as: 'vehicle',
-                    attributes: ['vehicleNumber', 'brand', 'model']
-                }
-            ]
-        });
-
-        if (!request) {
-            return res.status(404).json({ message: 'Related request not found' });
-        }
-
-        // Update receipt with latest information from request
+        // Combine information from both request and receipt
         const updatedReceipt = {
             ...receipt.toJSON(),
+            // User details
+            customer_officer_id: request.customer_officer_decision_by || receipt.customer_officer_id,
             customer_officer_name: request.user ? request.user.name : receipt.customer_officer_name,
-            customer_officer_id: request.user ? request.user.id : receipt.customer_officer_id,
-            vehicle_number: request.vehicle ? request.vehicle.vehicleNumber : receipt.vehicle_number,
-            vehicle_brand: request.vehicle ? request.vehicle.brand : receipt.vehicle_brand,
-            vehicle_model: request.vehicle ? request.vehicle.model : receipt.vehicle_model,
-            supplier_name: request.supplier ? request.supplier.name : receipt.supplier_name,
-            supplier_email: request.supplier ? request.supplier.email : receipt.supplier_email,
-            supplier_phone: request.supplier ? request.supplier.phone : receipt.supplier_phone
+            // Vehicle details
+            vehicle_number: request.vehicleNumber || receipt.vehicle_number,
+            vehicle_brand: request.vehicleBrand || receipt.vehicle_brand,
+            vehicle_model: request.vehicleModel || receipt.vehicle_model,
+            // Supplier details
+            supplier_name: request.supplier ? request.supplier.name : (request.supplierName || receipt.supplier_name),
+            supplier_email: request.supplier ? request.supplier.email : (request.supplierEmail || receipt.supplier_email),
+            supplier_phone: request.supplier ? request.supplier.phone : (request.supplierPhone || receipt.supplier_phone),
+            // Request specific details
+            submittedDate: request.submittedAt || receipt.submitted_date,
+            orderPlacedDate: request.orderPlacedDate || receipt.order_placed_date,
+            orderNumber: request.orderNumber || receipt.order_number,
+            // Items information
+            items: [{
+                description: `${request.tireSizeRequired} Tires`,
+                quantity: request.quantity || 1,
+                unitPrice: request.totalPrice ? Number(request.totalPrice) / (request.quantity || 1) : 0,
+                total: Number(request.totalPrice) || 0,
+                itemDetails: {
+                    tireSize: request.tireSizeRequired || '',
+                    brand: request.existingTireMake || ''
+                }
+            }]
         };
 
-        // Format receipt data for frontend with all fields
-        const formattedReceipt = formatReceiptResponse(updatedReceipt);
-
-        // If tubes were ordered, add them as a separate item
+        // If tubes were ordered, add them to the items list
         if (request.tubesQuantity > 0) {
-            formattedReceipt.items.push({
+            updatedReceipt.items.push({
                 description: 'Tire Tubes',
-                quantity: request.tubesQuantity,
-                unitPrice: 0, // Set actual tube price if available
-                total: 0,     // Set actual tube total if available
+                quantity: request.tubesQuantity || 0,
+                unitPrice: request.tubePrice || 0,
+                total: (request.tubesQuantity || 0) * (request.tubePrice || 0),
                 itemDetails: {
-                    tireSize: request.tireSizeRequired
+                    tireSize: request.tireSizeRequired || ''
                 }
             });
         }
+
+        // Format receipt data for frontend with all fields
+        const formattedReceipt = formatReceiptResponse(updatedReceipt);
 
         console.log('Sending formatted receipt:', formattedReceipt);
         res.json(formattedReceipt);
