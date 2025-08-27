@@ -6,13 +6,13 @@ exports.createReceipt = async (req, res) => {
         const { order_id } = req.body;
         
         // Get the order details
-        const order = await Request.findByPk(order_id, {
-            include: ['vehicle', 'supplier', 'user']
-        });
+        const order = await Request.findByPk(order_id);
 
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
+
+        console.log('Creating receipt for order:', order.toJSON());
 
         // Generate receipt number (format: RCP-YYYYMMDD-XXXX)
         const date = new Date();
@@ -21,14 +21,14 @@ exports.createReceipt = async (req, res) => {
         const receiptNumber = `RCP-${dateString}-${randomNum}`;
 
         // Create receipt
-        const receipt = await ReceiptModel.create({
+        const receiptData = {
             order_id: order.id,
             request_id: order.id.toString(),
             receipt_number: receiptNumber,
             date_generated: new Date(),
             total_amount: order.totalPrice || 0,
             customer_officer_id: order.customer_officer_decision_by,
-            customer_officer_name: order.user ? order.user.name : '',
+            customer_officer_name: order.requesterName, // Use requester name if available
             vehicle_number: order.vehicleNumber,
             vehicle_brand: order.vehicleBrand,
             vehicle_model: order.vehicleModel,
@@ -46,7 +46,10 @@ exports.createReceipt = async (req, res) => {
                 }
             }],
             notes: order.customer_officer_note
-        });
+        };
+
+        console.log('Creating receipt with data:', receiptData);
+        const receipt = await ReceiptModel.create(receiptData);
 
         res.status(201).json(receipt);
     } catch (error) {
@@ -69,19 +72,26 @@ exports.getReceipt = async (req, res) => {
 
 exports.getReceiptByOrderId = async (req, res) => {
     try {
+        console.log('Fetching receipt for order:', req.params.orderId);
+        
         const receipt = await ReceiptModel.findOne({
             where: { order_id: req.params.orderId }
         });
         
         if (!receipt) {
+            console.log('Receipt not found for order:', req.params.orderId);
             return res.status(404).json({ message: 'Receipt not found' });
         }
 
         // Get the related request to get additional details
         const request = await Request.findByPk(receipt.order_id);
         if (!request) {
+            console.log('Related request not found for receipt:', receipt.id);
             return res.status(404).json({ message: 'Related request not found' });
         }
+
+        console.log('Found receipt:', receipt.toJSON());
+        console.log('Found request:', request.toJSON());
 
         // Format receipt data for frontend
         const formattedReceipt = {
@@ -96,9 +106,10 @@ exports.getReceiptByOrderId = async (req, res) => {
             vehicleNumber: receipt.vehicle_number,
             vehicleBrand: receipt.vehicle_brand,
             vehicleModel: receipt.vehicle_model,
-            supplierName: receipt.supplier_name,
-            supplierEmail: receipt.supplier_email,
-            supplierPhone: receipt.supplier_phone,
+            // Use request's supplier info if receipt's is missing
+            supplierName: receipt.supplier_name || request.supplierName,
+            supplierEmail: receipt.supplier_email || request.supplierEmail,
+            supplierPhone: receipt.supplier_phone || request.supplierPhone,
             items: receipt.items,
             subtotal: Number(request.totalPrice),
             tax: Number(request.totalPrice) * 0.12, // 12% tax
@@ -107,7 +118,7 @@ exports.getReceiptByOrderId = async (req, res) => {
             paymentStatus: 'Paid',
             notes: request.customer_officer_note || '',
             companyDetails: {
-                name: 'CPC Tire Management',
+                name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',
                 phone: '+94 11 234 5678',
                 email: 'tiremanagement@cpc.lk',
