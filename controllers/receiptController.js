@@ -23,13 +23,31 @@ exports.createReceipt = async (req, res) => {
         // Create receipt
         const receipt = await ReceiptModel.create({
             order_id: order.id,
+            request_id: order.id.toString(),
             receipt_number: receiptNumber,
-            customer_name: order.user.name,
-            order_date: order.createdAt,
-            total_amount: order.totalAmount,
-            supplier_name: order.supplier.name,
-            vehicle_number: order.vehicle.vehicleNumber,
-            tire_details: JSON.stringify(order.tireDetails),
+            date_generated: new Date(),
+            total_amount: order.totalPrice || 0,
+            customer_officer_id: order.customer_officer_decision_by,
+            customer_officer_name: order.user ? order.user.name : '',
+            vehicle_number: order.vehicleNumber,
+            vehicle_brand: order.vehicleBrand,
+            vehicle_model: order.vehicleModel,
+            supplier_name: order.supplierName,
+            supplier_email: order.supplierEmail,
+            supplier_phone: order.supplierPhone,
+            items: [{
+                description: `${order.tireSizeRequired} Tires`,
+                quantity: order.quantity,
+                unitPrice: order.totalPrice ? Number(order.totalPrice) / order.quantity : 0,
+                total: Number(order.totalPrice) || 0,
+                itemDetails: {
+                    tireSize: order.tireSizeRequired,
+                    brand: order.existingTireMake
+                }
+            }],
+            notes: order.customer_officer_note,
+            submitted_date: order.submittedAt,
+            order_placed_date: order.orderPlacedDate
         });
 
         res.status(201).json(receipt);
@@ -102,8 +120,10 @@ exports.getReceiptByOrderId = async (req, res) => {
             paymentMethod: 'Corporate Account',
             paymentStatus: 'Paid',
             notes: request.customer_officer_note || '',
+            submittedDate: request.submittedAt,
+            orderPlacedDate: request.orderPlacedDate,
             companyDetails: {
-                name: 'CPC Tire Management',
+                name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',
                 phone: '+94 11 234 5678',
                 email: 'tiremanagement@cpc.lk',

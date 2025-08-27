@@ -72,6 +72,14 @@ const ReceiptModel = sequelize.define('Receipt', {
   notes: {
     type: DataTypes.TEXT,
     allowNull: true,
+  },
+  submitted_date: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  order_placed_date: {
+    type: DataTypes.DATE,
+    allowNull: true,
   }
 }, {
   tableName: 'receipts',
