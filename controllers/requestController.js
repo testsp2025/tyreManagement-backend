@@ -1,6 +1,5 @@
 const RequestImage = require("../models/RequestImage");
 const { Request } = require("../models");
-const { sequelize } = require("../config/db");
 const { pool } = require("../config/db");
 const { sendOrderEmail } = require("../utils/orderEmailService");
 const { Op } = require('sequelize');
@@ -660,59 +659,8 @@ exports.placeOrder = async (req, res) => {
         id
       ]);
 
-        // Create receipt
-        const { ReceiptModel } = require('../models/Receipt');
-
-        // Create items array for receipt
-        const items = [{
-          description: `${request.tireSizeRequired} Tires`,
-          quantity: request.quantity,
-          unitPrice: request.totalPrice / request.quantity,
-          total: request.totalPrice,
-          itemDetails: {
-            tireSize: request.tireSizeRequired,
-            brand: request.existingTireMake,
-          }
-        }];
-
-        if (request.tubesQuantity > 0) {
-          items.push({
-            description: "Tire Tubes",
-            quantity: request.tubesQuantity,
-            unitPrice: 0, // Include actual tube price if available
-            total: 0, // Include actual tube total if available
-            itemDetails: {
-              size: request.tireSizeRequired
-            }
-          });
-        }
-
-        // Log receipt data before creation
-        const receiptData = {
-          order_id: id,
-          request_id: id.toString(),
-          receipt_number: `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
-          date_generated: new Date(),
-          total_amount: request.totalPrice || 0,
-          customer_officer_id: req.user?.id,
-          customer_officer_name: req.user?.name,
-          vehicle_number: request.vehicleNumber,
-          vehicle_brand: request.vehicleBrand,
-          vehicle_model: request.vehicleModel,
-          supplier_name: supplierData.name,
-          supplier_email: supplierData.email,
-          supplier_phone: supplierData.phone,
-          items: items,
-          notes: orderNotes,
-          submitted_date: request.submittedAt,
-          order_placed_date: orderPlacedDate,
-          order_number: orderNumber
-        };
-
-        console.log("Creating receipt with data:", receiptData);
-
-        // Create receipt with simplified fields for SLT Mobitel
-        const receipt = await ReceiptModel.create(receiptData);      console.log("Successfully saved order details:", {
+        // Log successful order placement
+        console.log("Processing order placement...");      console.log("Successfully saved order details:", {
         orderNumber,
         orderNotes,
         supplierName: supplier.name,
@@ -883,48 +831,4 @@ exports.getRequestsByVehicleNumber = async (req, res) => {
   }
 };
 
-// New endpoint to get receipt by order ID
-exports.getReceiptByOrder = async (req, res) => {
-  try {
-    const orderId = req.params.orderId;
-    const { ReceiptModel } = require('../models/Receipt');
 
-    // Find receipt by order ID
-    const receipt = await ReceiptModel.findOne({
-      where: { order_id: orderId }
-    });
-
-    if (!receipt) {
-      return res.status(404).json({ error: 'Receipt not found' });
-    }
-
-    // Format the receipt data for frontend
-    const formattedReceipt = {
-      id: receipt.id.toString(),
-      orderId: receipt.order_id.toString(),
-      requestId: receipt.request_id,
-      receiptNumber: receipt.receipt_number,
-      dateGenerated: receipt.date_generated,
-      totalAmount: receipt.total_amount,
-      customerOfficerId: receipt.customer_officer_id,
-      customerOfficerName: receipt.customer_officer_name,
-      vehicleNumber: receipt.vehicle_number,
-      vehicleBrand: receipt.vehicle_brand,
-      vehicleModel: receipt.vehicle_model,
-      supplierName: receipt.supplier_name,
-      supplierEmail: receipt.supplier_email,
-      supplierPhone: receipt.supplier_phone,
-      supplierAddress: receipt.supplier_address,
-      items: receipt.items,
-      notes: receipt.notes,
-      submittedDate: receipt.submitted_date,
-      orderPlacedDate: receipt.order_placed_date,
-      orderNumber: receipt.order_number
-    };
-
-    res.json(formattedReceipt);
-  } catch (error) {
-    console.error('Error fetching receipt:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
