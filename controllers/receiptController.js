@@ -105,7 +105,7 @@ exports.getReceiptByOrderId = async (req, res) => {
                 phone: request.supplier_phone || '',
                 address: request.supplier_address || ''
             },
-            items: [{
+            items: receipt.items || [{
                 description: `${request.tireSizeRequired} Tires`,
                 quantity: request.quantity,
                 unitPrice: Number(request.totalPrice) / request.quantity,
@@ -120,10 +120,10 @@ exports.getReceiptByOrderId = async (req, res) => {
             discount: 0,
             paymentMethod: 'Corporate Account',
             paymentStatus: 'Paid',
-            notes: request.customer_officer_note || '',
-            submittedDate: request.submittedAt,
-            orderPlacedDate: request.orderPlacedDate,
-            orderNumber: request.orderNumber,
+            notes: receipt.notes || request.customer_officer_note || '',
+            submittedDate: receipt.submitted_date || request.submittedAt,
+            orderPlacedDate: receipt.order_placed_date || request.orderPlacedDate,
+            orderNumber: receipt.order_number || request.orderNumber,
             companyDetails: {
                 name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',

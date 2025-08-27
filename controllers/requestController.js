@@ -703,7 +703,10 @@ exports.placeOrder = async (req, res) => {
           supplier_email: supplierData.email,
           supplier_phone: supplierData.phone,
           items: items,
-          notes: orderNotes
+          notes: orderNotes,
+          submitted_date: request.submittedAt,
+          order_placed_date: orderPlacedDate,
+          order_number: orderNumber
         };
 
         console.log("Creating receipt with data:", receiptData);
@@ -913,7 +916,10 @@ exports.getReceiptByOrder = async (req, res) => {
       supplierPhone: receipt.supplier_phone,
       supplierAddress: receipt.supplier_address,
       items: receipt.items,
-      notes: receipt.notes
+      notes: receipt.notes,
+      submittedDate: receipt.submitted_date,
+      orderPlacedDate: receipt.order_placed_date,
+      orderNumber: receipt.order_number
     };
 
     res.json(formattedReceipt);
