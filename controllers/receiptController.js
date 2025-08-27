@@ -80,12 +80,10 @@ exports.getReceiptByOrderId = async (req, res) => {
             vehicleNumber: receipt.vehicle_number,
             vehicleBrand: request.vehicleBrand,
             vehicleModel: request.vehicleModel,
-            supplierDetails: {
-                name: receipt.supplier_name,
-                email: request.supplier_email || '',
-                phone: request.supplier_phone || '',
-                address: request.supplier_address || ''
-            },
+            supplierName: receipt.supplier_name,
+            supplierEmail: request.supplier_email || '',
+            supplierPhone: request.supplier_phone || '',
+            supplierAddress: request.supplier_address || '',
             items: [{
                 description: `${request.tireSizeRequired} Tires`,
                 quantity: request.quantity,
