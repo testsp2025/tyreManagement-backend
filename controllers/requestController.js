@@ -901,22 +901,12 @@ exports.getReceiptByOrder = async (req, res) => {
       vehicleNumber: receipt.vehicle_number,
       vehicleBrand: receipt.vehicle_brand,
       vehicleModel: receipt.vehicle_model,
-      supplierDetails: receipt.supplier_details,
+      supplierName: receipt.supplier_name,
+      supplierEmail: receipt.supplier_email,
+      supplierPhone: receipt.supplier_phone,
+      supplierAddress: receipt.supplier_address,
       items: receipt.items,
-      subtotal: receipt.subtotal,
-      tax: receipt.tax,
-      discount: receipt.discount,
-      paymentMethod: receipt.payment_method,
-      paymentStatus: receipt.payment_status,
-      notes: receipt.notes,
-      companyDetails: {
-        name: 'CPC Tire Management',
-        address: '123 Corporate Drive, Colombo',
-        phone: '+94 11 234 5678',
-        email: 'tiremanagement@cpc.lk',
-        website: 'https://www.cpc.lk',
-        logo: '/company-logo.png'
-      }
+      notes: receipt.notes
     };
 
     res.json(formattedReceipt);
