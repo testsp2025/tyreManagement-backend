@@ -21,6 +21,10 @@ const Supplier = sequelize.define(
       type: DataTypes.STRING(20),
       allowNull: false,
     },
+    address: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
     formsfree_key: {
       type: DataTypes.STRING(100),
       allowNull: false,

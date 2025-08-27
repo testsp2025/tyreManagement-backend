@@ -65,10 +65,6 @@ const ReceiptModel = sequelize.define('Receipt', {
     type: DataTypes.STRING(50),
     allowNull: true,
   },
-  supplier_address: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
   items: {
     type: DataTypes.JSON,
     allowNull: false,

@@ -591,22 +591,25 @@ exports.placeOrder = async (req, res) => {
       });
     }
 
-    // Get supplier details
-    const [suppliers] = await pool.query(
-      "SELECT * FROM supplier WHERE id = ?",
-      [supplierId]
-    );
-    if (suppliers.length === 0) {
+    // Get supplier details using Sequelize model
+    const Supplier = require('../models/Supplier');
+    const supplier = await Supplier.findByPk(supplierId);
+    
+    if (!supplier) {
       return res.status(404).json({ error: "Supplier not found" });
     }
-    const supplier = suppliers[0];
+    
+    // Convert to plain object
+    const supplierData = supplier.get({ plain: true });
 
-    // Store supplier details for later use in request update
-    const supplierDetails = {
+    // Log supplier details for debugging
+    console.log("Retrieved supplier details:", {
+      id: supplier.id,
       name: supplier.name,
       email: supplier.email,
-      phone: supplier.phone
-    };
+      phone: supplier.phone,
+      address: supplier.address
+    });
 
     // Validate supplier has FormsFree key
     if (!supplier.formsfree_key) {
@@ -684,8 +687,8 @@ exports.placeOrder = async (req, res) => {
           });
         }
 
-        // Create receipt with simplified fields for SLT Mobitel
-        const receipt = await ReceiptModel.create({
+        // Log receipt data before creation
+        const receiptData = {
           order_id: id,
           request_id: id.toString(),
           receipt_number: `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -696,13 +699,17 @@ exports.placeOrder = async (req, res) => {
           vehicle_number: request.vehicleNumber,
           vehicle_brand: request.vehicleBrand,
           vehicle_model: request.vehicleModel,
-          supplier_name: supplier.name,
-          supplier_email: supplier.email,
-          supplier_phone: supplier.phone,
-          supplier_address: supplier.address,
+          supplier_name: supplierData.name,
+          supplier_email: supplierData.email,
+          supplier_phone: supplierData.phone,
           items: items,
           notes: orderNotes
-        });      console.log("Successfully saved order details:", {
+        };
+
+        console.log("Creating receipt with data:", receiptData);
+
+        // Create receipt with simplified fields for SLT Mobitel
+        const receipt = await ReceiptModel.create(receiptData);      console.log("Successfully saved order details:", {
         orderNumber,
         orderNotes,
         supplierName: supplier.name,
