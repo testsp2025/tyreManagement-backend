@@ -53,43 +53,30 @@ const ReceiptModel = sequelize.define('Receipt', {
     type: DataTypes.STRING(255),
     allowNull: false,
   },
-  supplier_details: {
-    type: DataTypes.JSON,
+  supplier_name: {
+    type: DataTypes.STRING(255),
     allowNull: false,
+  },
+  supplier_email: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  supplier_phone: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  supplier_address: {
+    type: DataTypes.TEXT,
+    allowNull: true,
   },
   items: {
     type: DataTypes.JSON,
     allowNull: false,
   },
-  subtotal: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-  },
-  tax: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-  },
-  discount: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: true,
-  },
-  payment_method: {
-    type: DataTypes.STRING(50),
-    allowNull: true,
-  },
-  payment_status: {
-    type: DataTypes.STRING(50),
-    allowNull: false,
-    defaultValue: 'Paid',
-  },
   notes: {
     type: DataTypes.TEXT,
     allowNull: true,
-  },
-  company_details: {
-    type: DataTypes.JSON,
-    allowNull: false,
-  },
+  }
 }, {
   tableName: 'receipts',
   timestamps: true,

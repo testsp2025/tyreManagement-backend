@@ -660,11 +660,6 @@ exports.placeOrder = async (req, res) => {
         // Create receipt
         const { ReceiptModel } = require('../models/Receipt');
 
-        // Calculate subtotal, tax and total
-        const subtotal = request.totalPrice || 0;
-        const tax = subtotal * 0.12; // 12% tax
-        const total = subtotal + tax;
-
         // Create items array for receipt
         const items = [{
           description: `${request.tireSizeRequired} Tires`,
@@ -689,38 +684,24 @@ exports.placeOrder = async (req, res) => {
           });
         }
 
-        // Create receipt with all required fields
+        // Create receipt with simplified fields for SLT Mobitel
         const receipt = await ReceiptModel.create({
           order_id: id,
           request_id: id.toString(),
           receipt_number: `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
           date_generated: new Date(),
-          total_amount: total,
+          total_amount: request.totalPrice || 0,
           customer_officer_id: req.user?.id,
           customer_officer_name: req.user?.name,
           vehicle_number: request.vehicleNumber,
           vehicle_brand: request.vehicleBrand,
           vehicle_model: request.vehicleModel,
-          supplier_details: {
-            name: supplier.name,
-            email: supplier.email,
-            phone: supplier.phone,
-            address: supplier.address
-          },
+          supplier_name: supplier.name,
+          supplier_email: supplier.email,
+          supplier_phone: supplier.phone,
+          supplier_address: supplier.address,
           items: items,
-          subtotal: subtotal,
-          tax: tax,
-          payment_status: 'Paid',
-          payment_method: 'Corporate Account',
-          notes: orderNotes,
-          company_details: {
-            name: 'CPC Tire Management',
-            address: '123 Corporate Drive, Colombo',
-            phone: '+94 11 234 5678',
-            email: 'tiremanagement@cpc.lk',
-            website: 'https://www.cpc.lk',
-            logo: '/company-logo.png'
-          }
+          notes: orderNotes
         });      console.log("Successfully saved order details:", {
         orderNumber,
         orderNotes,
