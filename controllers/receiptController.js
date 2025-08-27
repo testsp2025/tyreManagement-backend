@@ -39,65 +39,34 @@ exports.generateReceipt = async (req, res) => {
         receipt_number, order_id, request_id, date_generated, total_amount,
         customer_officer_id, customer_officer_name, vehicle_number, vehicle_brand, vehicle_model,
         supplier_name, supplier_email, supplier_phone, subtotal, tax, discount, payment_status, notes, created_at, updated_at
-      ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW()) RETURNING id`;
+      ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`;
 
-    // Some MySQL setups don't support RETURNING; try insert and then get last insert id
-    let receiptId;
-    try {
-      const [result] = await pool.query(insertReceiptQuery, [
-        receiptNumber,
-        request.orderNumber || null,
-        request.id,
-        totalAmount,
-        customerOfficerId,
-        customerOfficerName,
-        request.vehicleNumber,
-        request.vehicleBrand,
-        request.vehicleModel,
-        supplierName,
-        supplierEmail,
-        supplierPhone,
-        subtotal,
-        tax,
-        discount,
-        'unpaid',
-        null
-      ]);
+    let receiptId = null;
+    const [result] = await pool.query(insertReceiptQuery, [
+      receiptNumber,
+      request.orderNumber || null,
+      request.id,
+      totalAmount,
+      customerOfficerId,
+      customerOfficerName,
+      request.vehicleNumber,
+      request.vehicleBrand,
+      request.vehicleModel,
+      supplierName,
+      supplierEmail,
+      supplierPhone,
+      subtotal,
+      tax,
+      discount,
+      'unpaid',
+      null
+    ]);
 
-      // MySQL returns insertId differently
-      if (result && result.insertId) {
-        receiptId = result.insertId;
-      } else if (result && result[0] && result[0].id) {
-        receiptId = result[0].id;
-      }
-    } catch (err) {
-      // Fallback: try without RETURNING
-      const [resIns] = await pool.query(`
-        INSERT INTO receipts (
-          receipt_number, order_id, request_id, date_generated, total_amount,
-          customer_officer_id, customer_officer_name, vehicle_number, vehicle_brand, vehicle_model,
-          supplier_name, supplier_email, supplier_phone, subtotal, tax, discount, payment_status, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `, [
-        receiptNumber,
-        request.orderNumber || null,
-        request.id,
-        totalAmount,
-        customerOfficerId,
-        customerOfficerName,
-        request.vehicleNumber,
-        request.vehicleBrand,
-        request.vehicleModel,
-        supplierName,
-        supplierEmail,
-        supplierPhone,
-        subtotal,
-        tax,
-        discount,
-        'unpaid',
-        null
-      ]);
-      receiptId = resIns && resIns.insertId ? resIns.insertId : null;
+    // Read insertId (MySQL)
+    if (result && result.insertId) {
+      receiptId = result.insertId;
+    } else if (Array.isArray(result) && result[0] && result[0].id) {
+      receiptId = result[0].id;
     }
 
     // Insert a default line item for the tires
