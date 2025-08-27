@@ -213,29 +213,8 @@ exports.getRequestById = async (req, res) => {
     // Map image paths to an array of URLs
     const imageUrls = images.map((img) => img.imagePath);
 
-    // Get supplier details if request has supplier info
-    let supplierDetails = null;
-    if (request.status === "order placed" && request.supplierName) {
-      const Supplier = require('../models/Supplier');
-      const supplier = await Supplier.findOne({
-        where: { name: request.supplierName }
-      });
-      if (supplier) {
-        supplierDetails = {
-          id: supplier.id,
-          name: supplier.name,
-          email: supplier.email,
-          phone: supplier.phone
-        };
-      }
-    }
-
-    // Add images and supplier details to the response
-    res.json({ 
-      ...request.toJSON(), 
-      images: imageUrls,
-      supplierDetails
-    });
+    // Add images to the response
+    res.json({ ...request.toJSON(), images: imageUrls });
   } catch (error) {
     console.error("Error in getRequestById:", error);
     res.status(500).json({ error: "Internal server error" });

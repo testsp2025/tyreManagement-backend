@@ -1,77 +1,6 @@
 const { ReceiptModel } = require('../models/Receipt');
 const Request = require('../models/Request');
 
-function formatReceipt(receipt) {
-    if (!receipt) return null;
-    return {
-        id: receipt.id ? receipt.id.toString() : '',
-        orderId: receipt.order_id ? receipt.order_id.toString() : '',
-        requestId: receipt.request_id ? receipt.request_id.toString() : '',
-        receiptNumber: receipt.receipt_number || '',
-        dateGenerated: receipt.date_generated || new Date(),
-        totalAmount: Number(receipt.total_amount || 0),
-        customerOfficerId: receipt.customer_officer_id || '',
-        customerOfficerName: receipt.customer_officer_name || '',
-        vehicleNumber: receipt.vehicle_number || '',
-        vehicleBrand: receipt.vehicle_brand || '',
-        vehicleModel: receipt.vehicle_model || '',
-        supplierName: receipt.supplier_name || '',
-        supplierEmail: receipt.supplier_email || '',
-        supplierPhone: receipt.supplier_phone || '',
-        items: Array.isArray(receipt.items) ? receipt.items : [],
-        notes: receipt.notes || '',
-        submittedDate: receipt.submitted_date || null,
-        orderPlacedDate: receipt.order_placed_date || null,
-        orderNumber: receipt.order_number || '',
-        createdAt: receipt.created_at || null,
-        updatedAt: receipt.updated_at || null
-    };
-}
-function formatReceiptResponse(receipt) {
-    if (!receipt) return null;
-    
-    const formattedReceipt = {
-        id: receipt.id ? receipt.id.toString() : '',
-        orderId: receipt.order_id ? receipt.order_id.toString() : '',
-        requestId: receipt.request_id ? receipt.request_id.toString() : '',
-        receiptNumber: receipt.receipt_number || `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
-        dateGenerated: receipt.date_generated || new Date(),
-        totalAmount: Number(receipt.total_amount || 0),
-        customerOfficerId: receipt.customer_officer_id || '',
-        customerOfficerName: receipt.customer_officer_name || '',
-        vehicleNumber: receipt.vehicle_number || '',
-        vehicleBrand: receipt.vehicle_brand || '',
-        vehicleModel: receipt.vehicle_model || '',
-        supplierName: receipt.supplier_name || '',
-        supplierEmail: receipt.supplier_email || '',
-        supplierPhone: receipt.supplier_phone || '',
-        items: Array.isArray(receipt.items) ? receipt.items.map(item => ({
-            ...item,
-            description: item.description || `${item.itemDetails?.tireSize || ''} Tires`,
-            quantity: item.quantity || 1,
-            unitPrice: Number(item.unitPrice || 0),
-            total: Number(item.total || 0),
-            itemDetails: {
-                tireSize: item.itemDetails?.tireSize || '',
-                brand: item.itemDetails?.brand || ''
-            }
-        })) : [],
-        notes: receipt.notes || '',
-        submittedDate: receipt.submitted_date || null,
-        orderPlacedDate: receipt.order_placed_date || null,
-        orderNumber: receipt.order_number || 'N/A',
-        createdAt: receipt.created_at || null,
-        updatedAt: receipt.updated_at || null
-    };
-
-    // Ensure total amount matches sum of items
-    if (formattedReceipt.items.length > 0) {
-        formattedReceipt.totalAmount = formattedReceipt.items.reduce((sum, item) => sum + Number(item.total), 0);
-    }
-
-    return formattedReceipt;
-}
-
 exports.createReceipt = async (req, res) => {
     try {
         const { order_id } = req.body;
@@ -131,44 +60,11 @@ exports.createReceipt = async (req, res) => {
 
 exports.getReceipt = async (req, res) => {
     try {
-        const receipt = await ReceiptModel.findByPk(req.params.id, {
-            attributes: [
-                'id', 'order_id', 'request_id', 'receipt_number', 'date_generated',
-                'total_amount', 'customer_officer_id', 'customer_officer_name',
-                'vehicle_number', 'vehicle_brand', 'vehicle_model',
-                'supplier_name', 'supplier_email', 'supplier_phone',
-                'items', 'notes', 'submitted_date', 'order_placed_date', 'order_number'
-            ]
-        });
-        
+        const receipt = await ReceiptModel.findByPk(req.params.id);
         if (!receipt) {
             return res.status(404).json({ message: 'Receipt not found' });
         }
-
-        // Format receipt data for frontend
-        const formattedReceipt = {
-            id: receipt.id.toString(),
-            orderId: receipt.order_id.toString(),
-            requestId: receipt.request_id.toString(),
-            receiptNumber: receipt.receipt_number,
-            dateGenerated: receipt.date_generated,
-            totalAmount: Number(receipt.total_amount),
-            customerOfficerId: receipt.customer_officer_id || '',
-            customerOfficerName: receipt.customer_officer_name || '',
-            vehicleNumber: receipt.vehicle_number,
-            vehicleBrand: receipt.vehicle_brand,
-            vehicleModel: receipt.vehicle_model,
-            supplierName: receipt.supplier_name,
-            supplierEmail: receipt.supplier_email,
-            supplierPhone: receipt.supplier_phone,
-            items: receipt.items || [],
-            notes: receipt.notes || '',
-            submittedDate: receipt.submitted_date,
-            orderPlacedDate: receipt.order_placed_date,
-            orderNumber: receipt.order_number
-        };
-
-        res.json(formattedReceipt);
+        res.json(receipt);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching receipt', error: error.message });
     }
@@ -176,84 +72,80 @@ exports.getReceipt = async (req, res) => {
 
 exports.getReceiptByOrderId = async (req, res) => {
     try {
-        // First get the request details since it has most of the information we need
-        const request = await Request.findOne({
-            where: { id: req.params.orderId },
-            include: [
-                {
-                    model: require('../models/User').User,
-                    as: 'user'
-                },
-                {
-                    model: require('../models/Supplier').Supplier,
-                    as: 'supplier'
-                },
-                {
-                    model: require('../models/Vehicle').Vehicle,
-                    as: 'vehicle'
-                }
-            ]
-        });
-
-        if (!request) {
-            return res.status(404).json({ message: 'Request not found' });
-        }
-
-        // Then get the receipt if it exists
         const receipt = await ReceiptModel.findOne({
             where: { order_id: req.params.orderId }
         });
-
+        
         if (!receipt) {
             return res.status(404).json({ message: 'Receipt not found' });
         }
 
-        // Combine information from both request and receipt
-        const updatedReceipt = {
-            ...receipt.toJSON(),
-            // User details
-            customer_officer_id: request.customer_officer_decision_by || receipt.customer_officer_id,
-            customer_officer_name: request.user ? request.user.name : receipt.customer_officer_name,
-            // Vehicle details
-            vehicle_number: request.vehicleNumber || receipt.vehicle_number,
-            vehicle_brand: request.vehicleBrand || receipt.vehicle_brand,
-            vehicle_model: request.vehicleModel || receipt.vehicle_model,
-            // Supplier details
-            supplier_name: request.supplier ? request.supplier.name : (request.supplierName || receipt.supplier_name),
-            supplier_email: request.supplier ? request.supplier.email : (request.supplierEmail || receipt.supplier_email),
-            supplier_phone: request.supplier ? request.supplier.phone : (request.supplierPhone || receipt.supplier_phone),
-            // Request specific details
-            submittedDate: request.submittedAt || receipt.submitted_date,
-            orderPlacedDate: request.orderPlacedDate || receipt.order_placed_date,
-            orderNumber: request.orderNumber || receipt.order_number,
-            // Items information
-            items: [{
+        // Get the related request to get additional details
+        const request = await Request.findByPk(receipt.order_id);
+        if (!request) {
+            return res.status(404).json({ message: 'Related request not found' });
+        }
+
+        // Format receipt data for frontend
+        const formattedReceipt = {
+            id: receipt.id.toString(),
+            orderId: receipt.order_id.toString(),
+            requestId: receipt.order_id.toString(),
+            receiptNumber: receipt.receipt_number,
+            dateGenerated: receipt.created_at,
+            totalAmount: Number(receipt.total_amount),
+            customerOfficerId: request.customer_officer_decision_by || '',
+            customerOfficerName: receipt.customer_name,
+            vehicleNumber: receipt.vehicle_number,
+            vehicleBrand: request.vehicleBrand,
+            vehicleModel: request.vehicleModel,
+            supplierDetails: {
+                name: receipt.supplier_name,
+                email: request.supplier_email || '',
+                phone: request.supplier_phone || '',
+                address: request.supplier_address || ''
+            },
+            items: receipt.items || [{
                 description: `${request.tireSizeRequired} Tires`,
-                quantity: request.quantity || 1,
-                unitPrice: request.totalPrice ? Number(request.totalPrice) / (request.quantity || 1) : 0,
-                total: Number(request.totalPrice) || 0,
+                quantity: request.quantity,
+                unitPrice: Number(request.totalPrice) / request.quantity,
+                total: Number(request.totalPrice),
                 itemDetails: {
-                    tireSize: request.tireSizeRequired || '',
-                    brand: request.existingTireMake || ''
+                    tireSize: request.tireSizeRequired,
+                    brand: request.existingTireMake
                 }
-            }]
+            }],
+            subtotal: Number(request.totalPrice),
+            tax: Number(request.totalPrice) * 0.12, // 12% tax
+            discount: 0,
+            paymentMethod: 'Corporate Account',
+            paymentStatus: 'Paid',
+            notes: receipt.notes || request.customer_officer_note || '',
+            submittedDate: receipt.submitted_date || request.submittedAt,
+            orderPlacedDate: receipt.order_placed_date || request.orderPlacedDate,
+            orderNumber: receipt.order_number || request.orderNumber,
+            companyDetails: {
+                name: 'SLT Mobitel Tire Management',
+                address: '123 Corporate Drive, Colombo',
+                phone: '+94 11 234 5678',
+                email: 'tiremanagement@cpc.lk',
+                website: 'https://www.cpc.lk',
+                logo: '/company-logo.png'
+            }
         };
 
-        // If tubes were ordered, add them to the items list
+        // If tubes were ordered, add them as a separate item
         if (request.tubesQuantity > 0) {
-            updatedReceipt.items.push({
+            formattedReceipt.items.push({
                 description: 'Tire Tubes',
-                quantity: request.tubesQuantity || 0,
-                unitPrice: request.tubePrice || 0,
-                total: (request.tubesQuantity || 0) * (request.tubePrice || 0),
+                quantity: request.tubesQuantity,
+                unitPrice: 0, // Set actual tube price if available
+                total: 0,     // Set actual tube total if available
                 itemDetails: {
-                    tireSize: request.tireSizeRequired || ''
+                    tireSize: request.tireSizeRequired
                 }
             });
         }
-
-        // Format receipt data for frontend with all fields
-        const formattedReceipt = formatReceiptResponse(updatedReceipt);
 
         console.log('Sending formatted receipt:', formattedReceipt);
         res.json(formattedReceipt);
