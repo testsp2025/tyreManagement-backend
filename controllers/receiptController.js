@@ -1,12 +1,12 @@
 const { ReceiptModel } = require('../models/Receipt');
 const Request = require('../models/Request');
 
-// Helper function to format receipt response
-const formatReceiptResponse = (receipt) => {
+function formatReceipt(receipt) {
+    if (!receipt) return null;
     return {
-        id: receipt.id.toString(),
-        orderId: receipt.order_id.toString(),
-        requestId: receipt.request_id.toString(),
+        id: receipt.id ? receipt.id.toString() : '',
+        orderId: receipt.order_id ? receipt.order_id.toString() : '',
+        requestId: receipt.request_id ? receipt.request_id.toString() : '',
         receiptNumber: receipt.receipt_number || '',
         dateGenerated: receipt.date_generated || new Date(),
         totalAmount: Number(receipt.total_amount || 0),
@@ -18,15 +18,42 @@ const formatReceiptResponse = (receipt) => {
         supplierName: receipt.supplier_name || '',
         supplierEmail: receipt.supplier_email || '',
         supplierPhone: receipt.supplier_phone || '',
-        items: receipt.items || [],
+        items: Array.isArray(receipt.items) ? receipt.items : [],
         notes: receipt.notes || '',
         submittedDate: receipt.submitted_date || null,
         orderPlacedDate: receipt.order_placed_date || null,
         orderNumber: receipt.order_number || '',
-        createdAt: receipt.created_at,
-        updatedAt: receipt.updated_at
+        createdAt: receipt.created_at || null,
+        updatedAt: receipt.updated_at || null
     };
-};
+}
+function formatReceiptResponse(receipt) {
+    if (!receipt) return null;
+    
+    return {
+        id: receipt.id ? receipt.id.toString() : '',
+        orderId: receipt.order_id ? receipt.order_id.toString() : '',
+        requestId: receipt.request_id ? receipt.request_id.toString() : '',
+        receiptNumber: receipt.receipt_number || '',
+        dateGenerated: receipt.date_generated || new Date(),
+        totalAmount: Number(receipt.total_amount || 0),
+        customerOfficerId: receipt.customer_officer_id || '',
+        customerOfficerName: receipt.customer_officer_name || '',
+        vehicleNumber: receipt.vehicle_number || '',
+        vehicleBrand: receipt.vehicle_brand || '',
+        vehicleModel: receipt.vehicle_model || '',
+        supplierName: receipt.supplier_name || '',
+        supplierEmail: receipt.supplier_email || '',
+        supplierPhone: receipt.supplier_phone || '',
+        items: Array.isArray(receipt.items) ? receipt.items : [],
+        notes: receipt.notes || '',
+        submittedDate: receipt.submitted_date || null,
+        orderPlacedDate: receipt.order_placed_date || null,
+        orderNumber: receipt.order_number || '',
+        createdAt: receipt.created_at || null,
+        updatedAt: receipt.updated_at || null
+    }
+}
 
 exports.createReceipt = async (req, res) => {
     try {
@@ -134,37 +161,22 @@ exports.getReceiptByOrderId = async (req, res) => {
     try {
         // Find receipt with eager loading of all related data
         const receipt = await ReceiptModel.findOne({
-            where: { order_id: req.params.orderId },
-            include: [{
-                model: Request,
-                as: 'request',
-                include: [
-                    {
-                        model: require('../models/User').User,
-                        as: 'user',
-                        attributes: ['id', 'name', 'email']
-                    },
-                    {
-                        model: require('../models/Supplier').Supplier,
-                        as: 'supplier',
-                        attributes: ['id', 'name', 'email', 'phone']
-                    }
-                ]
-            }]
+            where: { order_id: req.params.orderId }
         });
-        
+
+        if (!receipt) {
+            return res.status(404).json({ message: 'Receipt not found' });
+        }
+
+        // Get the related request
+        const request = await Request.findByPk(receipt.order_id);
+
         if (!request) {
             return res.status(404).json({ message: 'Related request not found' });
         }
 
         // Format receipt data for frontend with all fields
         const formattedReceipt = formatReceiptResponse(receipt);
-            items: receipt.items || [],
-            notes: receipt.notes || '',
-            submittedDate: receipt.submitted_date,
-            orderPlacedDate: receipt.order_placed_date,
-            orderNumber: receipt.order_number
-        };
 
         // If tubes were ordered, add them as a separate item
         if (request.tubesQuantity > 0) {
