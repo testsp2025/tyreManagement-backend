@@ -74,20 +74,60 @@ exports.getReceiptByOrderId = async (req, res) => {
     try {
         console.log('Fetching receipt for order ID:', req.params.orderId);
         
+        // First get the request to ensure we have all order details
+        const request = await Request.findOne({
+            where: { id: req.params.orderId },
+            raw: true
+        });
+
+        if (!request) {
+            console.log('Request not found for order ID:', req.params.orderId);
+            return res.status(404).json({ message: 'Request not found' });
+        }
+
+        console.log('Found request with details:', request);
+
+        // Then get the receipt
         const receipt = await ReceiptModel.findOne({
             where: { order_id: req.params.orderId }
         });
         
         if (!receipt) {
             console.log('Receipt not found for order ID:', req.params.orderId);
-            return res.status(404).json({ message: 'Receipt not found' });
+            // Create a new receipt if it doesn't exist
+            const newReceiptData = {
+                order_id: request.id,
+                request_id: request.id.toString(),
+                receipt_number: `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
+                date_generated: new Date(),
+                total_amount: request.totalPrice || 0,
+                customer_officer_id: request.customer_officer_decision_by,
+                customer_officer_name: request.requesterName,
+                vehicle_number: request.vehicleNumber,
+                vehicle_brand: request.vehicleBrand,
+                vehicle_model: request.vehicleModel,
+                supplier_name: request.supplierName,
+                supplier_email: request.supplierEmail,
+                supplier_phone: request.supplierPhone,
+                items: [{
+                    description: `${request.tireSizeRequired} Tires`,
+                    quantity: request.quantity,
+                    unitPrice: request.totalPrice ? parseFloat(request.totalPrice) / request.quantity : 0,
+                    total: parseFloat(request.totalPrice) || 0,
+                    itemDetails: {
+                        tireSize: request.tireSizeRequired,
+                        brand: request.existingTireMake
+                    }
+                }],
+                notes: request.customer_officer_note,
+                submitted_date: request.submittedAt,
+                order_placed_date: request.orderPlacedDate,
+                order_number: request.orderNumber
+            };
+            
+            const newReceipt = await ReceiptModel.create(newReceiptData);
+            receipt = newReceipt;
         }
-
-        // Get the related request with full details
-        const request = await Request.findOne({
-            where: { id: receipt.order_id },
-            raw: true // Get plain object
-        });
         
         if (!request) {
             console.log('Related request not found for order ID:', receipt.order_id);
@@ -101,18 +141,18 @@ exports.getReceiptByOrderId = async (req, res) => {
         const formattedReceipt = {
             id: receipt.id.toString(),
             orderId: receipt.order_id.toString(),
-            requestId: receipt.request_id || receipt.order_id.toString(),
+            requestId: request.id.toString(),
             receiptNumber: receipt.receipt_number,
-            dateGenerated: receipt.date_generated || receipt.created_at,
-            totalAmount: parseFloat(receipt.total_amount) || 0,
-            customerOfficerId: receipt.customer_officer_id || request.customer_officer_decision_by || '',
-            customerOfficerName: receipt.customer_officer_name || request.requesterName || '',
-            vehicleNumber: receipt.vehicle_number || request.vehicleNumber || '',
-            vehicleBrand: receipt.vehicle_brand || request.vehicleBrand || '',
-            vehicleModel: receipt.vehicle_model || request.vehicleModel || '',
-            supplierName: receipt.supplier_name || request.supplierName || '',
-            supplierEmail: receipt.supplier_email || request.supplierEmail || '',
-            supplierPhone: receipt.supplier_phone || request.supplierPhone || '',
+            dateGenerated: new Date().toISOString(),
+            totalAmount: parseFloat(request.totalPrice) || 0,
+            customerOfficerId: request.customer_officer_decision_by || '',
+            customerOfficerName: request.requesterName || '',
+            vehicleNumber: request.vehicleNumber || '',
+            vehicleBrand: request.vehicleBrand || '',
+            vehicleModel: request.vehicleModel || '',
+            supplierName: request.supplierName || '',
+            supplierEmail: request.supplierEmail || '',
+            supplierPhone: request.supplierPhone || '',
             supplierAddress: receipt.supplier_address || '',
             items: receipt.items && receipt.items.length > 0 ? receipt.items : [{
                 description: `${request.tireSizeRequired || ''} Tires`,
@@ -129,10 +169,10 @@ exports.getReceiptByOrderId = async (req, res) => {
             discount: 0,
             paymentMethod: 'Corporate Account',
             paymentStatus: 'Paid',
-            notes: receipt.notes || request.customer_officer_note || '',
-            submittedDate: receipt.submitted_date || request.submittedAt || null,
-            orderPlacedDate: receipt.order_placed_date || request.orderPlacedDate || null,
-            orderNumber: receipt.order_number || request.orderNumber || 'N/A',
+            notes: request.customer_officer_note || '',
+            submittedDate: request.submittedAt ? new Date(request.submittedAt).toISOString() : null,
+            orderPlacedDate: request.orderPlacedDate ? new Date(request.orderPlacedDate).toISOString() : null,
+            orderNumber: request.orderNumber || '',
             companyDetails: {
                 name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',
