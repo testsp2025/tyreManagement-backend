@@ -151,22 +151,23 @@ exports.getReceiptByOrderId = async (req, res) => {
         console.log('Found receipt:', receipt.toJSON());
         console.log('Found request:', request);
 
-        // Format receipt data for frontend
+        // Format receipt data for frontend with priority to request data
         const formattedReceipt = {
             id: receipt.id.toString(),
             orderId: receipt.order_id.toString(),
             requestId: request.id.toString(),
             receiptNumber: receipt.receipt_number,
-            dateGenerated: new Date().toISOString(),
-            totalAmount: parseFloat(request.totalPrice) || 0,
-            customerOfficerId: request.customer_officer_decision_by || '',
-            customerOfficerName: request.requesterName || '',
-            vehicleNumber: request.vehicleNumber || '',
-            vehicleBrand: request.vehicleBrand || '',
-            vehicleModel: request.vehicleModel || '',
-            supplierName: receipt.supplier_name || request.supplierName || '',
-            supplierEmail: receipt.supplier_email || request.supplierEmail || '',
-            supplierPhone: receipt.supplier_phone || request.supplierPhone || '',
+            dateGenerated: receipt.date_generated,
+            totalAmount: parseFloat(request.totalPrice) || parseFloat(receipt.total_amount) || 0,
+            customerOfficerId: request.customer_officer_decision_by || receipt.customer_officer_id || '',
+            customerOfficerName: request.requesterName || receipt.customer_officer_name || '',
+            vehicleNumber: request.vehicleNumber || receipt.vehicle_number || '',
+            vehicleBrand: request.vehicleBrand || receipt.vehicle_brand || '',
+            vehicleModel: request.vehicleModel || receipt.vehicle_model || '',
+            // Prioritize supplier details from request table
+            supplierName: request.supplierName || receipt.supplier_name || '',
+            supplierEmail: request.supplierEmail || receipt.supplier_email || '',
+            supplierPhone: request.supplierPhone || receipt.supplier_phone || '',
             supplierAddress: request.deliveryStreetName ? `${request.deliveryOfficeName || ''}, ${request.deliveryStreetName || ''}, ${request.deliveryTown || ''}`.trim() : '',
             items: receipt.items && receipt.items.length > 0 ? receipt.items : [{
                 description: `${request.tireSizeRequired || ''} Tires`,
@@ -183,10 +184,11 @@ exports.getReceiptByOrderId = async (req, res) => {
             discount: 0,
             paymentMethod: 'Corporate Account',
             paymentStatus: 'Paid',
-            notes: request.customer_officer_note || '',
-            submittedDate: request.submittedAt ? new Date(request.submittedAt).toISOString() : null,
-            orderPlacedDate: request.orderPlacedDate ? new Date(request.orderPlacedDate).toISOString() : null,
-            orderNumber: request.orderNumber || '',
+            notes: request.customer_officer_note || receipt.notes || '',
+            // Prioritize dates and order info from request
+            submittedDate: request.submittedAt || receipt.submitted_date || null,
+            orderPlacedDate: request.orderPlacedDate || receipt.order_placed_date || null,
+            orderNumber: request.orderNumber || receipt.order_number || '',
             companyDetails: {
                 name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',
