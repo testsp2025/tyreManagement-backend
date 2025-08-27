@@ -72,19 +72,30 @@ exports.getReceipt = async (req, res) => {
 
 exports.getReceiptByOrderId = async (req, res) => {
     try {
+        console.log('Fetching receipt for order ID:', req.params.orderId);
+        
         const receipt = await ReceiptModel.findOne({
             where: { order_id: req.params.orderId }
         });
         
         if (!receipt) {
+            console.log('Receipt not found for order ID:', req.params.orderId);
             return res.status(404).json({ message: 'Receipt not found' });
         }
 
-        // Get the related request to get additional details
-        const request = await Request.findByPk(receipt.order_id);
+        // Get the related request with full details
+        const request = await Request.findOne({
+            where: { id: receipt.order_id },
+            raw: true // Get plain object
+        });
+        
         if (!request) {
+            console.log('Related request not found for order ID:', receipt.order_id);
             return res.status(404).json({ message: 'Related request not found' });
         }
+
+        console.log('Found receipt:', receipt.toJSON());
+        console.log('Found request:', request);
 
         // Format receipt data for frontend
         const formattedReceipt = {
@@ -93,35 +104,35 @@ exports.getReceiptByOrderId = async (req, res) => {
             requestId: receipt.request_id || receipt.order_id.toString(),
             receiptNumber: receipt.receipt_number,
             dateGenerated: receipt.date_generated || receipt.created_at,
-            totalAmount: Number(receipt.total_amount),
+            totalAmount: parseFloat(receipt.total_amount) || 0,
             customerOfficerId: receipt.customer_officer_id || request.customer_officer_decision_by || '',
-            customerOfficerName: receipt.customer_officer_name || request.requesterName,
-            vehicleNumber: receipt.vehicle_number,
-            vehicleBrand: receipt.vehicle_brand || request.vehicleBrand,
-            vehicleModel: receipt.vehicle_model || request.vehicleModel,
-            supplierName: receipt.supplier_name,
-            supplierEmail: receipt.supplier_email,
-            supplierPhone: receipt.supplier_phone,
-            supplierAddress: receipt.supplier_address,
-            items: receipt.items || [{
-                description: `${request.tireSizeRequired} Tires`,
-                quantity: request.quantity,
-                unitPrice: Number(request.totalPrice) / request.quantity,
-                total: Number(request.totalPrice),
+            customerOfficerName: receipt.customer_officer_name || request.requesterName || '',
+            vehicleNumber: receipt.vehicle_number || request.vehicleNumber || '',
+            vehicleBrand: receipt.vehicle_brand || request.vehicleBrand || '',
+            vehicleModel: receipt.vehicle_model || request.vehicleModel || '',
+            supplierName: receipt.supplier_name || request.supplierName || '',
+            supplierEmail: receipt.supplier_email || request.supplierEmail || '',
+            supplierPhone: receipt.supplier_phone || request.supplierPhone || '',
+            supplierAddress: receipt.supplier_address || '',
+            items: receipt.items && receipt.items.length > 0 ? receipt.items : [{
+                description: `${request.tireSizeRequired || ''} Tires`,
+                quantity: request.quantity || 0,
+                unitPrice: request.totalPrice ? parseFloat(request.totalPrice) / (request.quantity || 1) : 0,
+                total: parseFloat(request.totalPrice) || 0,
                 itemDetails: {
-                    tireSize: request.tireSizeRequired,
-                    brand: request.existingTireMake
+                    tireSize: request.tireSizeRequired || '',
+                    brand: request.existingTireMake || ''
                 }
             }],
-            subtotal: Number(request.totalPrice),
-            tax: Number(request.totalPrice) * 0.12, // 12% tax
+            subtotal: parseFloat(request.totalPrice) || 0,
+            tax: (parseFloat(request.totalPrice) || 0) * 0.12, // 12% tax
             discount: 0,
             paymentMethod: 'Corporate Account',
             paymentStatus: 'Paid',
             notes: receipt.notes || request.customer_officer_note || '',
-            submittedDate: receipt.submitted_date || request.submittedAt,
-            orderPlacedDate: receipt.order_placed_date || request.orderPlacedDate,
-            orderNumber: receipt.order_number || request.orderNumber,
+            submittedDate: receipt.submitted_date || request.submittedAt || null,
+            orderPlacedDate: receipt.order_placed_date || request.orderPlacedDate || null,
+            orderNumber: receipt.order_number || request.orderNumber || 'N/A',
             companyDetails: {
                 name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',
