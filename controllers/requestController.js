@@ -633,10 +633,10 @@ exports.placeOrder = async (req, res) => {
       });
     }
 
-    // Update request status to "order placed" and save order details
-    try {
-      // Update the request with order details and supplier information
-      await pool.query(`
+      // Update request status to "order placed" and save order details
+      try {
+        // Update the request with order details and supplier information
+        await pool.query(`
         UPDATE requests 
         SET 
           status = 'order placed',
@@ -657,7 +657,71 @@ exports.placeOrder = async (req, res) => {
         id
       ]);
 
-      console.log("Successfully saved order details:", {
+        // Create receipt
+        const { ReceiptModel } = require('../models/Receipt');
+
+        // Calculate subtotal, tax and total
+        const subtotal = request.totalPrice || 0;
+        const tax = subtotal * 0.12; // 12% tax
+        const total = subtotal + tax;
+
+        // Create items array for receipt
+        const items = [{
+          description: `${request.tireSizeRequired} Tires`,
+          quantity: request.quantity,
+          unitPrice: request.totalPrice / request.quantity,
+          total: request.totalPrice,
+          itemDetails: {
+            tireSize: request.tireSizeRequired,
+            brand: request.existingTireMake,
+          }
+        }];
+
+        if (request.tubesQuantity > 0) {
+          items.push({
+            description: "Tire Tubes",
+            quantity: request.tubesQuantity,
+            unitPrice: 0, // Include actual tube price if available
+            total: 0, // Include actual tube total if available
+            itemDetails: {
+              size: request.tireSizeRequired
+            }
+          });
+        }
+
+        // Create receipt with all required fields
+        const receipt = await ReceiptModel.create({
+          order_id: id,
+          request_id: id.toString(),
+          receipt_number: `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
+          date_generated: new Date(),
+          total_amount: total,
+          customer_officer_id: req.user?.id,
+          customer_officer_name: req.user?.name,
+          vehicle_number: request.vehicleNumber,
+          vehicle_brand: request.vehicleBrand,
+          vehicle_model: request.vehicleModel,
+          supplier_details: {
+            name: supplier.name,
+            email: supplier.email,
+            phone: supplier.phone,
+            address: supplier.address
+          },
+          items: items,
+          subtotal: subtotal,
+          tax: tax,
+          payment_status: 'Paid',
+          payment_method: 'Corporate Account',
+          notes: orderNotes,
+          company_details: {
+            name: 'CPC Tire Management',
+            address: '123 Corporate Drive, Colombo',
+            phone: '+94 11 234 5678',
+            email: 'tiremanagement@cpc.lk',
+            website: 'https://www.cpc.lk',
+            logo: '/company-logo.png'
+          }
+        });      console.log("Successfully saved order details:", {
         orderNumber,
         orderNotes,
         supplierName: supplier.name,

@@ -15,33 +15,79 @@ const ReceiptModel = sequelize.define('Receipt', {
       key: 'id',
     },
   },
+  request_id: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+  },
   receipt_number: {
     type: DataTypes.STRING(50),
     allowNull: false,
     unique: true,
   },
-  customer_name: {
-    type: DataTypes.STRING(255),
-    allowNull: false,
-  },
-  order_date: {
+  date_generated: {
     type: DataTypes.DATE,
     allowNull: false,
+    defaultValue: DataTypes.NOW,
   },
   total_amount: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
   },
-  supplier_name: {
+  customer_officer_id: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  customer_officer_name: {
     type: DataTypes.STRING(255),
-    allowNull: false,
+    allowNull: true,
   },
   vehicle_number: {
     type: DataTypes.STRING(50),
     allowNull: false,
   },
-  tire_details: {
+  vehicle_brand: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+  },
+  vehicle_model: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+  },
+  supplier_details: {
+    type: DataTypes.JSON,
+    allowNull: false,
+  },
+  items: {
+    type: DataTypes.JSON,
+    allowNull: false,
+  },
+  subtotal: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+  },
+  tax: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+  },
+  discount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+  },
+  payment_method: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  payment_status: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    defaultValue: 'Paid',
+  },
+  notes: {
     type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  company_details: {
+    type: DataTypes.JSON,
     allowNull: false,
   },
 }, {
