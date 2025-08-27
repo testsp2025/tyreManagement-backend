@@ -161,16 +161,10 @@ exports.getAllRequests = async (req, res) => {
   try {
     // Use raw SQL to join with vehicles table to get department information
     const [requests] = await pool.query(`
-      SELECT 
-        r.*,
-        r.orderNumber,
-        r.orderNotes,
-        r.supplierName,
-        r.supplierEmail,
-        r.supplierPhone,
-        r.orderPlacedDate
-      FROM requests r
-      ORDER BY r.submittedAt DESC
+      SELECT
+  r.*
+FROM requests r
+ORDER BY r.submittedAt DESC
     `);
 
     // Fetch images for each request
@@ -653,8 +647,7 @@ exports.placeOrder = async (req, res) => {
           supplierName = ?,
           supplierEmail = ?,
           supplierPhone = ?,
-          orderPlacedDate = ?,
-          customer_officer_note = ?
+          orderPlacedDate = ?
         WHERE id = ?
       `, [
         orderNumber,
@@ -663,19 +656,32 @@ exports.placeOrder = async (req, res) => {
         supplier.email,
         supplier.phone,
         orderPlacedDate,
-        orderNotes,
         id
       ]);
 
-        console.log("Successfully saved order details:", {
-          orderNumber,
-          orderNotes,
-          supplierName: supplier.name,
-          supplierEmail: supplier.email,
-          supplierPhone: supplier.phone,
-          id,
-          status: "order placed"
-        });
+        // Log successful order placement
+        console.log("Processing order placement...");      console.log("Successfully saved order details:", {
+        orderNumber,
+        orderNotes,
+        supplierName: supplier.name,
+        supplierEmail: supplier.email,
+        supplierPhone: supplier.phone,
+        id,
+        status: "order placed"
+      });
+      // First try with all columns including order number and notes
+      await pool.query(
+        `UPDATE requests 
+         SET status = ?,
+             order_placed = true,
+             order_timestamp = NOW(),
+             order_number = ?,
+             order_notes = ?,
+             customer_officer_note = ?
+         WHERE id = ?`,
+        ["order placed", orderNumber, orderNotes, orderNotes, id]
+      );
+      console.log("Updated request with all columns including order details");
     } catch (error) {
       console.log("Full update failed, trying status only:", error.message);
       try {
