@@ -60,11 +60,44 @@ exports.createReceipt = async (req, res) => {
 
 exports.getReceipt = async (req, res) => {
     try {
-        const receipt = await ReceiptModel.findByPk(req.params.id);
+        const receipt = await ReceiptModel.findByPk(req.params.id, {
+            attributes: [
+                'id', 'order_id', 'request_id', 'receipt_number', 'date_generated',
+                'total_amount', 'customer_officer_id', 'customer_officer_name',
+                'vehicle_number', 'vehicle_brand', 'vehicle_model',
+                'supplier_name', 'supplier_email', 'supplier_phone',
+                'items', 'notes', 'submitted_date', 'order_placed_date', 'order_number'
+            ]
+        });
+        
         if (!receipt) {
             return res.status(404).json({ message: 'Receipt not found' });
         }
-        res.json(receipt);
+
+        // Format receipt data for frontend
+        const formattedReceipt = {
+            id: receipt.id.toString(),
+            orderId: receipt.order_id.toString(),
+            requestId: receipt.request_id.toString(),
+            receiptNumber: receipt.receipt_number,
+            dateGenerated: receipt.date_generated,
+            totalAmount: Number(receipt.total_amount),
+            customerOfficerId: receipt.customer_officer_id || '',
+            customerOfficerName: receipt.customer_officer_name || '',
+            vehicleNumber: receipt.vehicle_number,
+            vehicleBrand: receipt.vehicle_brand,
+            vehicleModel: receipt.vehicle_model,
+            supplierName: receipt.supplier_name,
+            supplierEmail: receipt.supplier_email,
+            supplierPhone: receipt.supplier_phone,
+            items: receipt.items || [],
+            notes: receipt.notes || '',
+            submittedDate: receipt.submitted_date,
+            orderPlacedDate: receipt.order_placed_date,
+            orderNumber: receipt.order_number
+        };
+
+        res.json(formattedReceipt);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching receipt', error: error.message });
     }
@@ -73,7 +106,14 @@ exports.getReceipt = async (req, res) => {
 exports.getReceiptByOrderId = async (req, res) => {
     try {
         const receipt = await ReceiptModel.findOne({
-            where: { order_id: req.params.orderId }
+            where: { order_id: req.params.orderId },
+            attributes: [
+                'id', 'order_id', 'request_id', 'receipt_number', 'date_generated',
+                'total_amount', 'customer_officer_id', 'customer_officer_name',
+                'vehicle_number', 'vehicle_brand', 'vehicle_model',
+                'supplier_name', 'supplier_email', 'supplier_phone',
+                'items', 'notes', 'submitted_date', 'order_placed_date', 'order_number'
+            ]
         });
         
         if (!receipt) {
@@ -90,48 +130,23 @@ exports.getReceiptByOrderId = async (req, res) => {
         const formattedReceipt = {
             id: receipt.id.toString(),
             orderId: receipt.order_id.toString(),
-            requestId: receipt.order_id.toString(),
+            requestId: receipt.request_id.toString(),
             receiptNumber: receipt.receipt_number,
-            dateGenerated: receipt.created_at,
+            dateGenerated: receipt.date_generated,
             totalAmount: Number(receipt.total_amount),
-            customerOfficerId: request.customer_officer_decision_by || '',
-            customerOfficerName: receipt.customer_name,
+            customerOfficerId: receipt.customer_officer_id || '',
+            customerOfficerName: receipt.customer_officer_name || '',
             vehicleNumber: receipt.vehicle_number,
-            vehicleBrand: request.vehicleBrand,
-            vehicleModel: request.vehicleModel,
-            supplierDetails: {
-                name: receipt.supplier_name,
-                email: request.supplier_email || '',
-                phone: request.supplier_phone || '',
-                address: request.supplier_address || ''
-            },
-            items: receipt.items || [{
-                description: `${request.tireSizeRequired} Tires`,
-                quantity: request.quantity,
-                unitPrice: Number(request.totalPrice) / request.quantity,
-                total: Number(request.totalPrice),
-                itemDetails: {
-                    tireSize: request.tireSizeRequired,
-                    brand: request.existingTireMake
-                }
-            }],
-            subtotal: Number(request.totalPrice),
-            tax: Number(request.totalPrice) * 0.12, // 12% tax
-            discount: 0,
-            paymentMethod: 'Corporate Account',
-            paymentStatus: 'Paid',
-            notes: receipt.notes || request.customer_officer_note || '',
-            submittedDate: receipt.submitted_date || request.submittedAt,
-            orderPlacedDate: receipt.order_placed_date || request.orderPlacedDate,
-            orderNumber: receipt.order_number || request.orderNumber,
-            companyDetails: {
-                name: 'SLT Mobitel Tire Management',
-                address: '123 Corporate Drive, Colombo',
-                phone: '+94 11 234 5678',
-                email: 'tiremanagement@cpc.lk',
-                website: 'https://www.cpc.lk',
-                logo: '/company-logo.png'
-            }
+            vehicleBrand: receipt.vehicle_brand,
+            vehicleModel: receipt.vehicle_model,
+            supplierName: receipt.supplier_name,
+            supplierEmail: receipt.supplier_email,
+            supplierPhone: receipt.supplier_phone,
+            items: receipt.items || [],
+            notes: receipt.notes || '',
+            submittedDate: receipt.submitted_date,
+            orderPlacedDate: receipt.order_placed_date,
+            orderNumber: receipt.order_number
         };
 
         // If tubes were ordered, add them as a separate item
