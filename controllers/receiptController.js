@@ -1,4 +1,4 @@
-const Receipt = require('../models/Receipt');
+const { ReceiptModel } = require('../models/Receipt');
 const Request = require('../models/Request');
 
 exports.createReceipt = async (req, res) => {
@@ -21,7 +21,7 @@ exports.createReceipt = async (req, res) => {
         const receiptNumber = `RCP-${dateString}-${randomNum}`;
 
         // Create receipt
-        const receipt = await Receipt.create({
+        const receipt = await ReceiptModel.create({
             order_id: order.id,
             receipt_number: receiptNumber,
             customer_name: order.user.name,
@@ -41,7 +41,7 @@ exports.createReceipt = async (req, res) => {
 
 exports.getReceipt = async (req, res) => {
     try {
-        const receipt = await Receipt.findByPk(req.params.id);
+        const receipt = await ReceiptModel.findByPk(req.params.id);
         if (!receipt) {
             return res.status(404).json({ message: 'Receipt not found' });
         }
@@ -53,7 +53,7 @@ exports.getReceipt = async (req, res) => {
 
 exports.getReceiptByOrderId = async (req, res) => {
     try {
-        const receipt = await Receipt.findOne({
+        const receipt = await ReceiptModel.findOne({
             where: { order_id: req.params.orderId }
         });
         if (!receipt) {

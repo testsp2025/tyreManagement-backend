@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+const { sequelize } = require('../config/db');
 
-const Receipt = sequelize.define('Receipt', {
+const ReceiptModel = sequelize.define('Receipt', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
@@ -51,4 +51,5 @@ const Receipt = sequelize.define('Receipt', {
   updatedAt: 'updated_at',
 });
 
-module.exports = Receipt;
+module.exports = ReceiptModel;
+module.exports.ReceiptModel = ReceiptModel;
