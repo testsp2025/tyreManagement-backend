@@ -1,5 +1,19 @@
 const { ReceiptModel } = require('../models/Receipt');
 const Request = require('../models/Request');
+const { sequelize } = require('../config/db');
+
+// Helper function to format date
+const formatDate = (date) => {
+    if (!date) return null;
+    return new Date(date).toISOString();
+};
+
+// Helper function to calculate totals
+const calculateTotals = (items) => {
+    return items.reduce((acc, item) => {
+        return acc + (parseFloat(item.total) || 0);
+    }, 0);
+};
 
 exports.createReceipt = async (req, res) => {
     try {
