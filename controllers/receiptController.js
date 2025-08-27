@@ -1,19 +1,5 @@
 const { ReceiptModel } = require('../models/Receipt');
 const Request = require('../models/Request');
-const { sequelize } = require('../config/db');
-
-// Helper function to format date
-const formatDate = (date) => {
-    if (!date) return null;
-    return new Date(date).toISOString();
-};
-
-// Helper function to calculate totals
-const calculateTotals = (items) => {
-    return items.reduce((acc, item) => {
-        return acc + (parseFloat(item.total) || 0);
-    }, 0);
-};
 
 exports.createReceipt = async (req, res) => {
     try {
@@ -46,9 +32,9 @@ exports.createReceipt = async (req, res) => {
             vehicle_number: order.vehicleNumber,
             vehicle_brand: order.vehicleBrand,
             vehicle_model: order.vehicleModel,
-            supplier_name: order.supplierName || '',
-            supplier_email: order.supplierEmail || '',
-            supplier_phone: order.supplierPhone || '',
+            supplier_name: order.supplierName,
+            supplier_email: order.supplierEmail,
+            supplier_phone: order.supplierPhone,
             items: [{
                 description: `${order.tireSizeRequired} Tires`,
                 quantity: order.quantity,
@@ -86,109 +72,58 @@ exports.getReceipt = async (req, res) => {
 
 exports.getReceiptByOrderId = async (req, res) => {
     try {
-        console.log('Fetching receipt for order ID:', req.params.orderId);
-        
-        // First get the request to ensure we have all order details
-        const request = await Request.findOne({
-            where: { id: req.params.orderId },
-            raw: true
-        });
-
-        if (!request) {
-            console.log('Request not found for order ID:', req.params.orderId);
-            return res.status(404).json({ message: 'Request not found' });
-        }
-
-        console.log('Found request with details:', request);
-
-        // Then get the receipt
         const receipt = await ReceiptModel.findOne({
             where: { order_id: req.params.orderId }
         });
         
         if (!receipt) {
-            console.log('Receipt not found for order ID:', req.params.orderId);
-            // Create a new receipt if it doesn't exist
-            const newReceiptData = {
-                order_id: request.id,
-                request_id: request.id.toString(),
-                receipt_number: `RCP-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
-                date_generated: new Date(),
-                total_amount: request.totalPrice || 0,
-                customer_officer_id: request.customer_officer_decision_by,
-                customer_officer_name: request.requesterName,
-                vehicle_number: request.vehicleNumber,
-                vehicle_brand: request.vehicleBrand,
-                vehicle_model: request.vehicleModel,
-                supplier_name: request.supplierName,
-                supplier_email: request.supplierEmail,
-                supplier_phone: request.supplierPhone,
-                items: [{
-                    description: `${request.tireSizeRequired} Tires`,
-                    quantity: request.quantity,
-                    unitPrice: request.totalPrice ? parseFloat(request.totalPrice) / request.quantity : 0,
-                    total: parseFloat(request.totalPrice) || 0,
-                    itemDetails: {
-                        tireSize: request.tireSizeRequired,
-                        brand: request.existingTireMake
-                    }
-                }],
-                notes: request.customer_officer_note,
-                submitted_date: request.submittedAt,
-                order_placed_date: request.orderPlacedDate,
-                order_number: request.orderNumber
-            };
-            
-            const newReceipt = await ReceiptModel.create(newReceiptData);
-            receipt = newReceipt;
+            return res.status(404).json({ message: 'Receipt not found' });
         }
-        
+
+        // Get the related request to get additional details
+        const request = await Request.findByPk(receipt.order_id);
         if (!request) {
-            console.log('Related request not found for order ID:', receipt.order_id);
             return res.status(404).json({ message: 'Related request not found' });
         }
 
-        console.log('Found receipt:', receipt.toJSON());
-        console.log('Found request:', request);
-
-        // Format receipt data for frontend with priority to request data
+        // Format receipt data for frontend
         const formattedReceipt = {
             id: receipt.id.toString(),
             orderId: receipt.order_id.toString(),
-            requestId: request.id.toString(),
+            requestId: receipt.order_id.toString(),
             receiptNumber: receipt.receipt_number,
-            dateGenerated: receipt.date_generated,
-            totalAmount: parseFloat(request.totalPrice) || parseFloat(receipt.total_amount) || 0,
-            customerOfficerId: request.customer_officer_decision_by || receipt.customer_officer_id || '',
-            customerOfficerName: request.requesterName || receipt.customer_officer_name || '',
-            vehicleNumber: request.vehicleNumber || receipt.vehicle_number || '',
-            vehicleBrand: request.vehicleBrand || receipt.vehicle_brand || '',
-            vehicleModel: request.vehicleModel || receipt.vehicle_model || '',
-            // Prioritize supplier details from request table
-            supplierName: request.supplierName || receipt.supplier_name || '',
-            supplierEmail: request.supplierEmail || receipt.supplier_email || '',
-            supplierPhone: request.supplierPhone || receipt.supplier_phone || '',
-            supplierAddress: request.deliveryStreetName ? `${request.deliveryOfficeName || ''}, ${request.deliveryStreetName || ''}, ${request.deliveryTown || ''}`.trim() : '',
-            items: receipt.items && receipt.items.length > 0 ? receipt.items : [{
-                description: `${request.tireSizeRequired || ''} Tires`,
-                quantity: request.quantity || 0,
-                unitPrice: request.totalPrice ? parseFloat(request.totalPrice) / (request.quantity || 1) : 0,
-                total: parseFloat(request.totalPrice) || 0,
+            dateGenerated: receipt.created_at,
+            totalAmount: Number(receipt.total_amount),
+            customerOfficerId: request.customer_officer_decision_by || '',
+            customerOfficerName: receipt.customer_name,
+            vehicleNumber: receipt.vehicle_number,
+            vehicleBrand: request.vehicleBrand,
+            vehicleModel: request.vehicleModel,
+            supplierDetails: {
+                name: receipt.supplier_name,
+                email: request.supplier_email || '',
+                phone: request.supplier_phone || '',
+                address: request.supplier_address || ''
+            },
+            items: receipt.items || [{
+                description: `${request.tireSizeRequired} Tires`,
+                quantity: request.quantity,
+                unitPrice: Number(request.totalPrice) / request.quantity,
+                total: Number(request.totalPrice),
                 itemDetails: {
-                    tireSize: request.tireSizeRequired || '',
-                    brand: request.existingTireMake || ''
+                    tireSize: request.tireSizeRequired,
+                    brand: request.existingTireMake
                 }
             }],
-            subtotal: parseFloat(request.totalPrice) || 0,
-            tax: (parseFloat(request.totalPrice) || 0) * 0.12, // 12% tax
+            subtotal: Number(request.totalPrice),
+            tax: Number(request.totalPrice) * 0.12, // 12% tax
             discount: 0,
             paymentMethod: 'Corporate Account',
             paymentStatus: 'Paid',
-            notes: request.customer_officer_note || receipt.notes || '',
-            // Prioritize dates and order info from request
-            submittedDate: request.submittedAt || receipt.submitted_date || null,
-            orderPlacedDate: request.orderPlacedDate || receipt.order_placed_date || null,
-            orderNumber: request.orderNumber || receipt.order_number || '',
+            notes: receipt.notes || request.customer_officer_note || '',
+            submittedDate: receipt.submitted_date || request.submittedAt,
+            orderPlacedDate: receipt.order_placed_date || request.orderPlacedDate,
+            orderNumber: receipt.order_number || request.orderNumber,
             companyDetails: {
                 name: 'SLT Mobitel Tire Management',
                 address: '123 Corporate Drive, Colombo',

@@ -19,11 +19,6 @@ const ReceiptModel = sequelize.define('Receipt', {
     type: DataTypes.STRING(50),
     allowNull: false,
   },
-  status: {
-    type: DataTypes.STRING(50),
-    allowNull: false,
-    defaultValue: 'pending',
-  },
   receipt_number: {
     type: DataTypes.STRING(50),
     allowNull: false,
