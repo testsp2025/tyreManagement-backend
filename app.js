@@ -54,6 +54,7 @@ app.use("/api/vehicles", require("./routes/vehicleRoutes"));
 app.use("/api/requests", require("./routes/requestRoutes"));
 app.use("/api/suppliers", require("./routes/supplierRoutes"));
 app.use("/api/tire-details", require("./routes/tireDetailsRoutes"));
+app.use("/api/receipts", require("./routes/receiptRoutes"));
 const userRoutes = require("./routes/userRoutes");
 app.use("/api/users", userRoutes);
 
