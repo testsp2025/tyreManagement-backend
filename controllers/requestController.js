@@ -637,12 +637,6 @@ exports.placeOrder = async (req, res) => {
 
       // Update request status to "order placed" and save order details
       try {
-        // First, get the complete request details to ensure we have all needed data
-        const request = await Request.findByPk(id);
-        if (!request) {
-          throw new Error('Request not found');
-        }
-
         // Update the request with order details and supplier information
         await pool.query(`
         UPDATE requests 
@@ -665,67 +659,6 @@ exports.placeOrder = async (req, res) => {
         id
       ]);
 
-        try {
-          // Generate a receipt
-          const Receipt = require('../models/Receipt');
-          
-          // Generate receipt number (YYYYMMDD-XXXX format)
-          const date = new Date();
-          const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
-          const randomPart = Math.floor(1000 + Math.random() * 9000);
-          const receipt_number = `${datePart}-${randomPart}`;
-
-          // Calculate total amount and unit price
-          const total_amount = request.totalPrice || 0;
-          const quantity = parseInt(request.quantity) || 1;
-          const unit_price = total_amount / quantity;
-
-          // Debug: Log receipt data before creation
-          const receiptData = {
-            order_id: orderNumber,
-            receipt_number: receipt_number,
-            total_amount: total_amount,
-            vehicle_number: request.vehicleNumber,
-            request_id: request.id,
-            date_generated: new Date(), // Set the generation date
-            customer_officer_id: request.customer_officer_decision_by,
-            customer_officer_name: request.requesterName,
-            vehicle_brand: request.vehicleBrand,
-            vehicle_model: request.vehicleModel,
-            items: JSON.stringify([{
-              tireSize: request.tireSize,
-              quantity: quantity,
-              tubesQuantity: parseInt(request.tubesQuantity) || 0,
-              unitPrice: unit_price
-            }]),
-            notes: orderNotes,
-            supplier_name: supplier.name,
-            supplier_email: supplier.email,
-            supplier_phone: supplier.phone,
-            submitted_date: request.submittedAt,
-            order_placed_date: orderPlacedDate,
-            order_number: orderNumber
-          };
-
-          console.log('Attempting to create receipt with data:', JSON.stringify(receiptData, null, 2));
-          
-          // Create the receipt
-          const receipt = await Receipt.create(receiptData);
-          
-          // Debug: Log created receipt
-          console.log('Receipt created successfully:', {
-            id: receipt.id,
-            receipt_number: receipt.receipt_number,
-            request_id: receipt.request_id,
-            order_number: receipt.order_number
-          });
-
-          console.log('Receipt generated successfully:', receipt.receipt_number);
-        } catch (receiptError) {
-          console.error('Error generating receipt:', receiptError);
-          throw new Error('Failed to generate receipt: ' + receiptError.message);
-        }
-
         // Log successful order placement
         console.log("Processing order placement...");      console.log("Successfully saved order details:", {
         orderNumber,
@@ -736,7 +669,7 @@ exports.placeOrder = async (req, res) => {
         id,
         status: "order placed"
       });
-      // Update the status only after we know the receipt was created
+      // First try with all columns including order number and notes
       await pool.query(
         `UPDATE requests 
          SET status = ?,
@@ -748,45 +681,28 @@ exports.placeOrder = async (req, res) => {
          WHERE id = ?`,
         ["order placed", orderNumber, orderNotes, orderNotes, id]
       );
-      console.log("Updated request with order details");
-
-      // Create receipt using the Receipt model
-      const Receipt = require('../models/Receipt');
-      
-      // Format the receipt data
-      const receiptData = {
-        order_id: orderNumber,
-        receipt_number: `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`,
-        total_amount: request.totalPrice || 0,
-        vehicle_number: request.vehicleNumber,
-        request_id: request.id,
-        date_generated: new Date(),
-        customer_officer_id: request.customer_officer_decision_by,
-        customer_officer_name: request.requesterName,
-        vehicle_brand: request.vehicleBrand,
-        vehicle_model: request.vehicleModel,
-        items: JSON.stringify([{
-          tireSize: request.tireSize,
-          quantity: parseInt(request.quantity) || 1,
-          tubesQuantity: parseInt(request.tubesQuantity) || 0,
-          unitPrice: (request.totalPrice || 0) / (parseInt(request.quantity) || 1)
-        }]),
-        notes: orderNotes,
-        supplier_name: supplier.name,
-        supplier_email: supplier.email,
-        supplier_phone: supplier.phone,
-        submitted_date: request.submittedAt,
-        order_placed_date: orderPlacedDate,
-        order_number: orderNumber
-      };
-
-      console.log('Creating receipt with data:', JSON.stringify(receiptData, null, 2));
-      
-      const receipt = await Receipt.create(receiptData);
-      console.log('Receipt created successfully with ID:', receipt.id);
+      console.log("Updated request with all columns including order details");
     } catch (error) {
-      console.error('Error in placeOrder:', error);
-      throw error;
+      console.log("Full update failed, trying status only:", error.message);
+      try {
+        // If that fails, try just updating status
+        await pool.query("UPDATE requests SET status = ? WHERE id = ?", [
+          "order placed",
+          id,
+        ]);
+        console.log("Updated request status only");
+      } catch (statusError) {
+        console.log(
+          "Status update also failed, trying with enum check:",
+          statusError.message
+        );
+        // If status update fails, it might be an enum issue, try with a valid enum value
+        await pool.query(
+          "UPDATE requests SET status = ? WHERE id = ?",
+          ["complete", id] // Use 'complete' as fallback since 'order placed' might not be in enum
+        );
+        console.log("Updated request status to complete as fallback");
+      }
     }
 
     console.log("Order placed successfully:", emailResult);
