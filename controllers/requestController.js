@@ -659,6 +659,44 @@ exports.placeOrder = async (req, res) => {
         id
       ]);
 
+        // Generate a receipt
+        const Receipt = require('../models/Receipt');
+        
+        // Generate receipt number (YYYYMMDD-XXXX format)
+        const date = new Date();
+        const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
+        const randomPart = Math.floor(1000 + Math.random() * 9000);
+        const receipt_number = `${datePart}-${randomPart}`;
+
+        // Calculate total amount
+        const total_amount = request.totalPrice || 0;
+
+        // Create the receipt
+        const receipt = await Receipt.create({
+          order_id: orderNumber,
+          receipt_number: receipt_number,
+          total_amount: total_amount,
+          vehicle_number: request.vehicleNumber,
+          request_id: request.id,
+          customer_officer_id: request.customer_officer_decision_by,
+          customer_officer_name: request.requesterName, // We might want to update this to actual customer officer name
+          vehicle_brand: request.vehicleBrand,
+          vehicle_model: request.vehicleModel,
+          items: [{
+            tireSize: request.tireSize,
+            quantity: request.quantity,
+            tubesQuantity: request.tubesQuantity,
+            unitPrice: total_amount / (request.quantity || 1)
+          }],
+          notes: orderNotes,
+          supplier_name: supplier.name,
+          supplier_email: supplier.email,
+          supplier_phone: supplier.phone,
+          submitted_date: request.submittedAt,
+          order_placed_date: orderPlacedDate,
+          order_number: orderNumber
+        });
+
         // Log successful order placement
         console.log("Processing order placement...");      console.log("Successfully saved order details:", {
         orderNumber,
