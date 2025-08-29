@@ -39,9 +39,8 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Enable preflight for all routes
-// Accept larger payloads for HTML/pdf conversion
-app.use(express.json({ limit: '5mb' }));
-app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files
 const uploadDir = path.join(__dirname, "uploads");
@@ -57,9 +56,6 @@ app.use("/api/suppliers", require("./routes/supplierRoutes"));
 app.use("/api/tire-details", require("./routes/tireDetailsRoutes"));
 const userRoutes = require("./routes/userRoutes");
 app.use("/api/users", userRoutes);
-
-// PDF generation route (optional dependency: puppeteer)
-app.use('/api/pdf', require('./routes/pdfRoutes'));
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
