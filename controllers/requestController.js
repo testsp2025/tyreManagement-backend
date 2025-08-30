@@ -1081,16 +1081,10 @@ exports.getDeletedRequests = async (req, res) => {
     const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'deletedAt';
     const safeSortOrder = validSortOrders.includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
     
-    // Build the main query
+    // Build the main query - simplified for debugging
     const mainQuery = `
-      SELECT 
-        rb.*,
-        u.name as deletedByName,
-        DATE_FORMAT(rb.deletedAt, '%Y-%m-%d %H:%i:%s') as formattedDeletedAt,
-        DATE_FORMAT(rb.submittedAt, '%Y-%m-%d %H:%i:%s') as formattedSubmittedAt,
-        DATEDIFF(NOW(), rb.deletedAt) as daysSinceDeleted
+      SELECT rb.* 
       FROM requestbackup rb
-      LEFT JOIN users u ON rb.deletedBy = u.id
       ${whereClause}
       ORDER BY rb.${safeSortBy} ${safeSortOrder}
       LIMIT ? OFFSET ?
@@ -1125,58 +1119,17 @@ exports.getDeletedRequests = async (req, res) => {
     console.log(`📊 Found ${deletedRequests[0].length} deleted requests (page ${page} of ${Math.ceil(total / limit)})`);
     console.log(`📊 Total count from database:`, total);
     
-    // Get images for deleted requests from backup table
-    const requestsWithImages = await Promise.all(
-      deletedRequests[0].map(async (request) => {
-        try {
-          const [images] = await pool.query(`
-            SELECT imagePath, imageIndex 
-            FROM request_images_backup 
-            WHERE requestId = ? 
-            ORDER BY imageIndex ASC
-          `, [request.id]);
-          
-          const imageUrls = images.map((img) => img.imagePath);
-          
-          return {
-            ...request,
-            images: imageUrls,
-            isDeleted: true,
-            canRestore: true
-          };
-        } catch (imageError) {
-          console.log(`⚠️ No backup images found for request ${request.id}:`, imageError.message);
-          return {
-            ...request,
-            images: [],
-            isDeleted: true,
-            canRestore: true
-          };
-        }
-      })
-    );
-    
-    // Calculate additional statistics
-    const [statusStats] = await pool.query(`
-      SELECT 
-        status,
-        COUNT(*) as count
-      FROM requestbackup rb
-      ${whereClause ? whereClause.replace('WHERE', 'WHERE') : ''}
-      GROUP BY status
-      ORDER BY count DESC
-    `, queryParams);
-    
-    const [deletionStats] = await pool.query(`
-      SELECT 
-        DATE(deletedAt) as deleteDate,
-        COUNT(*) as count
-      FROM requestbackup rb
-      ${whereClause}
-      GROUP BY DATE(deletedAt)
-      ORDER BY deleteDate DESC
-      LIMIT 30
-    `, queryParams);
+    // Process results simply for debugging
+    const requestsWithImages = deletedRequests[0].map((request) => {
+      return {
+        ...request,
+        images: [],
+        isDeleted: true,
+        canRestore: true,
+        deletedByName: request.deletedByName || 'System',
+        daysSinceDeleted: request.deletedAt ? Math.floor((new Date() - new Date(request.deletedAt)) / (1000 * 60 * 60 * 24)) : 0
+      };
+    });
     
     res.json({
       success: true,
@@ -1202,11 +1155,6 @@ exports.getDeletedRequests = async (req, res) => {
       sorting: {
         sortBy: safeSortBy,
         sortOrder: safeSortOrder
-      },
-      statistics: {
-        byStatus: statusStats[0] || [],
-        byDeletionDate: deletionStats[0] || [],
-        totalDeleted: total
       },
       message: `Found ${requestsWithImages.length} deleted requests`
     });
@@ -1392,13 +1340,8 @@ exports.getDeletedRequestsByUser = async (req, res) => {
     
     const [deletedRequests, [{ total }]] = await Promise.all([
       pool.query(`
-        SELECT 
-          rb.*,
-          u.name as deletedByName,
-          DATE_FORMAT(rb.deletedAt, '%Y-%m-%d %H:%i:%s') as formattedDeletedAt,
-          DATEDIFF(NOW(), rb.deletedAt) as daysSinceDeleted
+        SELECT rb.*
         FROM requestbackup rb
-        LEFT JOIN users u ON rb.deletedBy = u.id
         ${whereClause}
         ORDER BY rb.deletedAt DESC
         LIMIT ? OFFSET ?
@@ -1406,33 +1349,19 @@ exports.getDeletedRequestsByUser = async (req, res) => {
       pool.query(`SELECT COUNT(*) as total FROM requestbackup rb ${whereClause}`, queryParams)
     ]);
     
-    // Add images to requests
-    const requestsWithImages = await Promise.all(
-      deletedRequests[0].map(async (request) => {
-        try {
-          const [images] = await pool.query(`
-            SELECT imagePath, imageIndex 
-            FROM request_images_backup 
-            WHERE requestId = ? 
-            ORDER BY imageIndex ASC
-          `, [request.id]);
-          
-          return {
-            ...request,
-            images: images.map(img => img.imagePath),
-            isDeleted: true,
-            canRestore: true
-          };
-        } catch (imageError) {
-          return {
-            ...request,
-            images: [],
-            isDeleted: true,
-            canRestore: true
-          };
-        }
-      })
-    );
+    console.log(`📊 Raw results for user ${userId}:`, deletedRequests[0]);
+    console.log(`📊 Total count for user ${userId}:`, total);
+    
+    // Add images to requests - simplified
+    const requestsWithImages = deletedRequests[0].map((request) => {
+      return {
+        ...request,
+        images: [],
+        isDeleted: true,
+        canRestore: true,
+        daysSinceDeleted: request.deletedAt ? Math.floor((new Date() - new Date(request.deletedAt)) / (1000 * 60 * 60 * 24)) : 0
+      };
+    });
     
     res.json({
       success: true,
@@ -1452,6 +1381,52 @@ exports.getDeletedRequestsByUser = async (req, res) => {
       success: false,
       message: 'Error fetching deleted requests',
       error: error.message
+    });
+  }
+};
+
+// Test endpoint for debugging soft delete
+exports.testBackupCount = async (req, res) => {
+  try {
+    const { pool } = require('../config/db');
+    
+    // Check if requestbackup table exists
+    const [tableExists] = await pool.query(`
+      SELECT COUNT(*) as tableExists 
+      FROM information_schema.tables 
+      WHERE table_schema = DATABASE() 
+      AND table_name = 'requestbackup'
+    `);
+    
+    if (tableExists[0].tableExists === 0) {
+      return res.json({
+        error: 'requestbackup table does not exist',
+        backupCount: 0,
+        originalCount: 0,
+        tableExists: false
+      });
+    }
+    
+    // Get counts from both tables
+    const [backupRows] = await pool.query('SELECT COUNT(*) as count FROM requestbackup');
+    const [originalRows] = await pool.query('SELECT COUNT(*) as count FROM requests');
+    
+    // Get sample data from backup table
+    const [sampleData] = await pool.query('SELECT * FROM requestbackup LIMIT 5');
+    
+    res.json({
+      success: true,
+      backupCount: backupRows[0].count,
+      originalCount: originalRows[0].count,
+      tableExists: true,
+      sampleData: sampleData,
+      message: 'Backup table status'
+    });
+  } catch (error) {
+    console.error('Error checking backup table:', error);
+    res.status(500).json({ 
+      error: error.message,
+      success: false
     });
   }
 };

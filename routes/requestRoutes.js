@@ -63,22 +63,6 @@ router.get("/deleted/user/:userId", requestController.getDeletedRequestsByUser);
 router.post("/restore/:id", requestController.restoreDeletedRequest);
 
 // Test endpoint for debugging soft delete
-router.get("/test/backup-count", async (req, res) => {
-  try {
-    const { pool } = require('../config/db');
-    const [rows] = await pool.query('SELECT COUNT(*) as count FROM requestbackup');
-    const [originalRows] = await pool.query('SELECT COUNT(*) as count FROM requests');
-    
-    res.json({
-      backupCount: rows[0].count,
-      originalCount: originalRows[0].count,
-      message: 'Backup table status'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
+router.get("/test/backup-count", requestController.testBackupCount);
 
 module.exports = router;
