@@ -1017,6 +1017,11 @@ exports.getRequestsByVehicleNumber = async (req, res) => {
 exports.getDeletedRequests = async (req, res) => {
   try {
     console.log('🗃️ Fetching deleted requests from backup table with filters...');
+    console.log('Query parameters:', req.query);
+    
+    // First, let's test if the table exists and has data
+    const [tableTest] = await pool.query('SELECT COUNT(*) as count FROM requestbackup');
+    console.log('📊 Total records in requestbackup table:', tableTest[0].count);
     
     // Extract query parameters for filtering
     const {
@@ -1107,13 +1112,18 @@ exports.getDeletedRequests = async (req, res) => {
       sorting: { sortBy: safeSortBy, sortOrder: safeSortOrder }
     });
     
+    console.log('📋 Main query:', mainQuery);
+    console.log('📋 Query params:', [...queryParams, parseInt(limit), offset]);
+    
     // Execute queries
     const [deletedRequests, [{ total }]] = await Promise.all([
       pool.query(mainQuery, [...queryParams, parseInt(limit), offset]),
       pool.query(countQuery, queryParams)
     ]);
     
+    console.log(`📊 Raw query results:`, deletedRequests[0]);
     console.log(`📊 Found ${deletedRequests[0].length} deleted requests (page ${page} of ${Math.ceil(total / limit)})`);
+    console.log(`📊 Total count from database:`, total);
     
     // Get images for deleted requests from backup table
     const requestsWithImages = await Promise.all(
@@ -1346,6 +1356,11 @@ exports.getDeletedRequestsByUser = async (req, res) => {
     } = req.query;
     
     console.log(`🗃️ Fetching deleted requests for user ID: ${userId}`);
+    console.log('Query parameters:', req.query);
+    
+    // Test if table has data for this user
+    const [userTest] = await pool.query('SELECT COUNT(*) as count FROM requestbackup WHERE userId = ?', [userId]);
+    console.log(`📊 Total records for user ${userId} in requestbackup:`, userTest[0].count);
     
     const offset = (parseInt(page) - 1) * parseInt(limit);
     
