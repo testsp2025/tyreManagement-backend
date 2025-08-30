@@ -758,17 +758,24 @@ exports.deleteRequest = async (req, res) => {
     const id = req.params.id;
     const { userId } = req.body; // Optional: to track who deleted the request
     
+    console.log(`🗑️  DELETE REQUEST CALLED - ID: ${id}, UserID: ${userId}`);
+    console.log('Request body:', req.body);
+    console.log('Request params:', req.params);
+    
     // Start transaction to ensure data integrity
     await connection.beginTransaction();
+    console.log('✅ Transaction started');
     
     // First, check if the request exists
     const request = await Request.findByPk(id);
     if (!request) {
+      console.log(`❌ Request ID ${id} not found`);
       await connection.rollback();
       return res.status(404).json({ message: "Request not found" });
     }
     
-    console.log(`Starting soft delete for request ID: ${id}`);
+    console.log(`✅ Request found: ${request.id} - ${request.vehicleNumber}`);
+    console.log(`🔄 Starting soft delete for request ID: ${id}`);
     
     // Get all request images before deletion
     const requestImages = await RequestImage.findAll({
@@ -776,17 +783,30 @@ exports.deleteRequest = async (req, res) => {
       raw: true
     });
     
+    console.log(`📸 Found ${requestImages.length} images for request ${id}`);
+    
     // Create backup entry with original request data
     const requestData = request.toJSON();
     
+    // Remove any fields that don't exist in backup table or might cause issues
+    const { createdAt, updatedAt, ...cleanRequestData } = requestData;
+    
     // Add deletion metadata
     const backupData = {
-      ...requestData,
+      ...cleanRequestData,
       deletedAt: new Date(),
       deletedBy: userId || null
     };
     
-    console.log('Moving request to backup table...');
+    console.log('📦 Moving request to backup table...');
+    console.log('Backup data keys:', Object.keys(backupData));
+    console.log('Sample backup data:', {
+      id: backupData.id,
+      vehicleNumber: backupData.vehicleNumber,
+      status: backupData.status,
+      deletedAt: backupData.deletedAt,
+      deletedBy: backupData.deletedBy
+    });
     
     // Insert into backup table using raw SQL for better control
     const backupFields = Object.keys(backupData);
@@ -794,16 +814,68 @@ exports.deleteRequest = async (req, res) => {
     const placeholders = backupFields.map(() => '?').join(', ');
     const fieldNames = backupFields.join(', ');
     
-    await connection.query(
-      `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
-      backupValues
-    );
+    console.log('🔍 SQL: INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})');
     
-    console.log('Request moved to backup table successfully');
+    try {
+      await connection.query(
+        `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
+        backupValues
+      );
+      console.log('✅ Request moved to backup table successfully');
+    } catch (insertError) {
+      console.error('❌ Error inserting into backup table:', insertError);
+      console.error('SQL Error details:', {
+        code: insertError.code,
+        errno: insertError.errno,
+        sqlMessage: insertError.sqlMessage,
+        sql: insertError.sql
+      });
+      
+      // Try a simpler insert with only essential fields
+      console.log('🔄 Trying simplified backup insert...');
+      const essentialData = {
+        id: request.id,
+        userId: request.userId,
+        vehicleId: request.vehicleId,
+        vehicleNumber: request.vehicleNumber,
+        quantity: request.quantity,
+        tubesQuantity: request.tubesQuantity,
+        tireSize: request.tireSize,
+        requestReason: request.requestReason,
+        requesterName: request.requesterName,
+        requesterEmail: request.requesterEmail,
+        requesterPhone: request.requesterPhone,
+        vehicleBrand: request.vehicleBrand,
+        vehicleModel: request.vehicleModel,
+        lastReplacementDate: request.lastReplacementDate,
+        existingTireMake: request.existingTireMake,
+        tireSizeRequired: request.tireSizeRequired,
+        presentKmReading: request.presentKmReading,
+        previousKmReading: request.previousKmReading,
+        tireWearPattern: request.tireWearPattern,
+        comments: request.comments,
+        status: request.status,
+        submittedAt: request.submittedAt,
+        supervisorId: request.supervisorId,
+        deletedAt: new Date(),
+        deletedBy: userId || null
+      };
+      
+      const essentialFields = Object.keys(essentialData);
+      const essentialValues = Object.values(essentialData);
+      const essentialPlaceholders = essentialFields.map(() => '?').join(', ');
+      const essentialFieldNames = essentialFields.join(', ');
+      
+      await connection.query(
+        `INSERT INTO requestbackup (${essentialFieldNames}) VALUES (${essentialPlaceholders})`,
+        essentialValues
+      );
+      console.log('✅ Request moved to backup table with essential fields');
+    }
     
     // Create backup entries for request images if they exist
     if (requestImages.length > 0) {
-      console.log(`Backing up ${requestImages.length} request images...`);
+      console.log(`📸 Backing up ${requestImages.length} request images...`);
       
       // Create request_images_backup table if it doesn't exist
       await connection.query(`
@@ -827,44 +899,51 @@ exports.deleteRequest = async (req, res) => {
         );
       }
       
-      console.log('Request images backed up successfully');
+      console.log('✅ Request images backed up successfully');
     }
     
     // Delete request images from original table
     if (requestImages.length > 0) {
       await connection.query('DELETE FROM request_images WHERE requestId = ?', [id]);
-      console.log('Original request images deleted');
+      console.log('🗑️  Original request images deleted');
     }
     
     // Delete the original request
-    await connection.query('DELETE FROM requests WHERE id = ?', [id]);
-    console.log('Original request deleted');
+    console.log(`🗑️  Deleting original request ${id} from requests table...`);
+    const deleteResult = await connection.query('DELETE FROM requests WHERE id = ?', [id]);
+    console.log('Delete result:', deleteResult[0]);
+    console.log('✅ Original request deleted');
     
     // Commit the transaction
     await connection.commit();
+    console.log('✅ Transaction committed');
     
-    console.log(`Soft delete completed successfully for request ID: ${id}`);
+    console.log(`🎉 Soft delete completed successfully for request ID: ${id}`);
     
     res.json({ 
       message: "Request deleted successfully and moved to backup",
       deletedRequestId: id,
       backupCreated: true,
-      imagesBackedUp: requestImages.length
+      imagesBackedUp: requestImages.length,
+      success: true
     });
     
   } catch (error) {
     // Rollback transaction on error
     await connection.rollback();
-    console.error("Error in soft delete process:", error);
+    console.error("❌ Error in soft delete process:", error);
+    console.error("Error stack:", error.stack);
     
     res.status(500).json({ 
       error: "Failed to delete request", 
       details: error.message,
-      requestId: req.params.id
+      requestId: req.params.id,
+      success: false
     });
   } finally {
     // Always release the connection
     connection.release();
+    console.log('🔚 Database connection released');
   }
 };
 
