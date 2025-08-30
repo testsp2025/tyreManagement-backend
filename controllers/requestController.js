@@ -1,5 +1,5 @@
 const RequestImage = require("../models/RequestImage");
-const { Request } = require("../models");
+const { Request, RequestBackup } = require("../models");
 const { pool } = require("../config/db");
 const { sendOrderEmail } = require("../utils/orderEmailService");
 const { Op } = require('sequelize');
@@ -752,16 +752,119 @@ exports.placeOrder = async (req, res) => {
 };
 
 exports.deleteRequest = async (req, res) => {
+  const connection = await pool.getConnection();
+  
   try {
     const id = req.params.id;
-    const result = await Request.destroy({ where: { id } });
-    if (result === 0) {
+    const { userId } = req.body; // Optional: to track who deleted the request
+    
+    // Start transaction to ensure data integrity
+    await connection.beginTransaction();
+    
+    // First, check if the request exists
+    const request = await Request.findByPk(id);
+    if (!request) {
+      await connection.rollback();
       return res.status(404).json({ message: "Request not found" });
     }
-    res.json({ message: "Request deleted successfully" });
+    
+    console.log(`Starting soft delete for request ID: ${id}`);
+    
+    // Get all request images before deletion
+    const requestImages = await RequestImage.findAll({
+      where: { requestId: id },
+      raw: true
+    });
+    
+    // Create backup entry with original request data
+    const requestData = request.toJSON();
+    
+    // Add deletion metadata
+    const backupData = {
+      ...requestData,
+      deletedAt: new Date(),
+      deletedBy: userId || null
+    };
+    
+    console.log('Moving request to backup table...');
+    
+    // Insert into backup table using raw SQL for better control
+    const backupFields = Object.keys(backupData);
+    const backupValues = Object.values(backupData);
+    const placeholders = backupFields.map(() => '?').join(', ');
+    const fieldNames = backupFields.join(', ');
+    
+    await connection.query(
+      `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
+      backupValues
+    );
+    
+    console.log('Request moved to backup table successfully');
+    
+    // Create backup entries for request images if they exist
+    if (requestImages.length > 0) {
+      console.log(`Backing up ${requestImages.length} request images...`);
+      
+      // Create request_images_backup table if it doesn't exist
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS request_images_backup (
+          id INT PRIMARY KEY,
+          requestId INT NOT NULL,
+          imagePath TEXT NOT NULL,
+          imageIndex INT NOT NULL,
+          deletedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_backup_request_id (requestId),
+          INDEX idx_backup_deleted_at (deletedAt)
+        )
+      `);
+      
+      // Insert images into backup table
+      for (const image of requestImages) {
+        await connection.query(
+          `INSERT INTO request_images_backup (id, requestId, imagePath, imageIndex, deletedAt) 
+           VALUES (?, ?, ?, ?, ?)`,
+          [image.id, image.requestId, image.imagePath, image.imageIndex, new Date()]
+        );
+      }
+      
+      console.log('Request images backed up successfully');
+    }
+    
+    // Delete request images from original table
+    if (requestImages.length > 0) {
+      await connection.query('DELETE FROM request_images WHERE requestId = ?', [id]);
+      console.log('Original request images deleted');
+    }
+    
+    // Delete the original request
+    await connection.query('DELETE FROM requests WHERE id = ?', [id]);
+    console.log('Original request deleted');
+    
+    // Commit the transaction
+    await connection.commit();
+    
+    console.log(`Soft delete completed successfully for request ID: ${id}`);
+    
+    res.json({ 
+      message: "Request deleted successfully and moved to backup",
+      deletedRequestId: id,
+      backupCreated: true,
+      imagesBackedUp: requestImages.length
+    });
+    
   } catch (error) {
-    console.error("Error deleting request:", error);
-    res.status(500).json({ error: "Internal server error" });
+    // Rollback transaction on error
+    await connection.rollback();
+    console.error("Error in soft delete process:", error);
+    
+    res.status(500).json({ 
+      error: "Failed to delete request", 
+      details: error.message,
+      requestId: req.params.id
+    });
+  } finally {
+    // Always release the connection
+    connection.release();
   }
 };
 
@@ -828,6 +931,203 @@ exports.getRequestsByVehicleNumber = async (req, res) => {
       message: 'Error processing your request',
       error: error.message,
     });
+  }
+};
+
+// Get deleted requests from backup table
+exports.getDeletedRequests = async (req, res) => {
+  try {
+    console.log('Fetching deleted requests from backup table...');
+    
+    // Fetch deleted requests with optional pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+    
+    const [deletedRequests, [{ total }]] = await Promise.all([
+      pool.query(`
+        SELECT 
+          rb.*,
+          u.name as deletedByName
+        FROM requestbackup rb
+        LEFT JOIN users u ON rb.deletedBy = u.id
+        ORDER BY rb.deletedAt DESC
+        LIMIT ? OFFSET ?
+      `, [limit, offset]),
+      pool.query('SELECT COUNT(*) as total FROM requestbackup')
+    ]);
+    
+    console.log(`Found ${deletedRequests[0].length} deleted requests (page ${page})`);
+    
+    // Get images for deleted requests from backup table
+    const requestsWithImages = await Promise.all(
+      deletedRequests[0].map(async (request) => {
+        try {
+          const [images] = await pool.query(`
+            SELECT imagePath, imageIndex 
+            FROM request_images_backup 
+            WHERE requestId = ? 
+            ORDER BY imageIndex ASC
+          `, [request.id]);
+          
+          const imageUrls = images.map((img) => img.imagePath);
+          
+          return {
+            ...request,
+            images: imageUrls,
+            isDeleted: true
+          };
+        } catch (imageError) {
+          console.log(`No backup images found for request ${request.id}:`, imageError.message);
+          return {
+            ...request,
+            images: [],
+            isDeleted: true
+          };
+        }
+      })
+    );
+    
+    res.json({
+      success: true,
+      data: requestsWithImages,
+      pagination: {
+        page,
+        limit,
+        total: total,
+        totalPages: Math.ceil(total / limit)
+      },
+      message: `Found ${requestsWithImages.length} deleted requests`
+    });
+    
+  } catch (error) {
+    console.error('Error fetching deleted requests:', {
+      error: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching deleted requests',
+      error: error.message,
+    });
+  }
+};
+
+// Restore a deleted request from backup
+exports.restoreDeletedRequest = async (req, res) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    const { id } = req.params;
+    const { userId } = req.body; // User performing the restoration
+    
+    console.log(`Starting restoration of deleted request ID: ${id}`);
+    
+    // Start transaction
+    await connection.beginTransaction();
+    
+    // Check if request exists in backup
+    const [backupRequests] = await connection.query(
+      'SELECT * FROM requestbackup WHERE id = ?',
+      [id]
+    );
+    
+    if (backupRequests.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ 
+        success: false,
+        message: "Deleted request not found in backup" 
+      });
+    }
+    
+    const backupRequest = backupRequests[0];
+    
+    // Check if a request with this ID already exists in the main table
+    const [existingRequests] = await connection.query(
+      'SELECT id FROM requests WHERE id = ?',
+      [id]
+    );
+    
+    if (existingRequests.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({ 
+        success: false,
+        message: "A request with this ID already exists in the main table" 
+      });
+    }
+    
+    // Prepare data for restoration (remove backup-specific fields)
+    const { deletedAt, deletedBy, ...requestData } = backupRequest;
+    
+    // Restore to main requests table
+    const fields = Object.keys(requestData);
+    const values = Object.values(requestData);
+    const placeholders = fields.map(() => '?').join(', ');
+    const fieldNames = fields.join(', ');
+    
+    await connection.query(
+      `INSERT INTO requests (${fieldNames}) VALUES (${placeholders})`,
+      values
+    );
+    
+    console.log('Request restored to main table');
+    
+    // Restore images if they exist in backup
+    const [backupImages] = await connection.query(
+      'SELECT * FROM request_images_backup WHERE requestId = ?',
+      [id]
+    );
+    
+    if (backupImages.length > 0) {
+      console.log(`Restoring ${backupImages.length} images...`);
+      
+      for (const image of backupImages) {
+        const { deletedAt, ...imageData } = image;
+        await connection.query(
+          'INSERT INTO request_images (id, requestId, imagePath, imageIndex) VALUES (?, ?, ?, ?)',
+          [imageData.id, imageData.requestId, imageData.imagePath, imageData.imageIndex]
+        );
+      }
+      
+      // Remove from backup images table
+      await connection.query(
+        'DELETE FROM request_images_backup WHERE requestId = ?',
+        [id]
+      );
+      
+      console.log('Images restored successfully');
+    }
+    
+    // Remove from backup table
+    await connection.query('DELETE FROM requestbackup WHERE id = ?', [id]);
+    
+    console.log('Request removed from backup table');
+    
+    // Commit transaction
+    await connection.commit();
+    
+    console.log(`Request restoration completed successfully for ID: ${id}`);
+    
+    res.json({
+      success: true,
+      message: "Request restored successfully",
+      restoredRequestId: id,
+      imagesRestored: backupImages.length
+    });
+    
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error restoring deleted request:", error);
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to restore request",
+      error: error.message,
+      requestId: req.params.id
+    });
+  } finally {
+    connection.release();
   }
 };
 

@@ -13,6 +13,7 @@ if (missingEnvVars.length > 0) {
 
 const app = require("./app");
 const { sequelize, pool } = require("./config/db"); // Correct import
+const { autoMigrate } = require("./scripts/auto-migrate-on-start"); // Auto migration for Railway
 require("./models"); // Loads all models and associations
 // const requestRoutes = require("./routes/requestRoutes"); // Removed - routes handled in app.js
 // const vehicleRoutes = require("./routes/vehicleRoutes"); // Removed - routes handled in app.js
@@ -29,6 +30,7 @@ require("./models/Request");
 require("./models/RequestImage");
 require("./models/TireDetails");
 require("./models/Supplier");
+require("./models/RequestBackup");
 
 // Test database connection
 async function testDbConnection() {
@@ -70,6 +72,15 @@ async function initializeDatabase() {
 
     // Test database connection
     await testDbConnection();
+
+    // Run auto-migration for Railway deployment
+    console.log("Running auto-migration for soft delete functionality...");
+    const migrationResult = await autoMigrate();
+    if (migrationResult.success) {
+      console.log("✅ Migration check completed:", migrationResult.message);
+    } else {
+      console.log("⚠️  Migration warning:", migrationResult.message);
+    }
 
     // Sync models
     await sequelize.sync({ alter: true });

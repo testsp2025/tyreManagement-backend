@@ -4,6 +4,7 @@ const Request = require("./Request");
 const RequestImage = require("./RequestImage");
 const TireDetails = require("./TireDetails");
 const Supplier = require("./Supplier");
+const RequestBackup = require("./RequestBackup");
 
 // Associations
 User.hasMany(Vehicle, { foreignKey: "registeredBy" });
@@ -25,4 +26,5 @@ module.exports = {
   RequestImage,
   TireDetails,
   Supplier,
+  RequestBackup,
 };

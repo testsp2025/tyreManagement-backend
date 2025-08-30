@@ -53,6 +53,12 @@ router.delete("/:id", requestController.deleteRequest);
 // Get requests by vehicle number
 router.get("/vehicle/:vehicleNumber", requestController.getRequestsByVehicleNumber);
 
+// Get deleted requests from backup
+router.get("/deleted", requestController.getDeletedRequests);
+
+// Restore a deleted request
+router.post("/restore/:id", requestController.restoreDeletedRequest);
+
 
 
 module.exports = router;
