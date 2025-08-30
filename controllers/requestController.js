@@ -1140,55 +1140,6 @@ exports.getDeletedRequests = async (req, res) => {
   }
 };
 
-// Get a single deleted request by ID from backup table (including backup images)
-exports.getDeletedRequestById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ success: false, message: 'Missing request id' });
-    }
-
-    // Fetch the deleted request from backup
-    const [rows] = await pool.query('SELECT * FROM requestbackup WHERE id = ?', [id]);
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Deleted request not found' });
-    }
-
-    const backupRequest = rows[0];
-
-    // Fetch related images from backup images table
-    const [imageRows] = await pool.query(
-      'SELECT imagePath FROM request_images_backup WHERE requestId = ? ORDER BY imageIndex ASC',
-      [id]
-    );
-    const images = (imageRows || []).map(r => r.imagePath);
-
-    // Attach helper fields similar to list endpoint
-    const daysSinceDeleted = backupRequest.deletedAt
-      ? Math.floor((new Date() - new Date(backupRequest.deletedAt)) / (1000 * 60 * 60 * 24))
-      : 0;
-
-    return res.json({
-      success: true,
-      data: {
-        ...backupRequest,
-        images,
-        isDeleted: true,
-        canRestore: true,
-        daysSinceDeleted,
-      },
-    });
-  } catch (error) {
-    console.error('❌ Error fetching deleted request by id:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error fetching deleted request',
-      error: error.message,
-    });
-  }
-};
-
 // Restore a deleted request from backup
 exports.restoreDeletedRequest = async (req, res) => {
   const connection = await pool.getConnection();
