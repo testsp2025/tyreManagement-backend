@@ -777,130 +777,97 @@ exports.deleteRequest = async (req, res) => {
     console.log(`✅ Request found: ${request.id} - ${request.vehicleNumber}`);
     console.log(`🔄 Starting soft delete for request ID: ${id}`);
     
-    // Get all request images before deletion
-    const requestImages = await RequestImage.findAll({
-      where: { requestId: id },
-      raw: true
-    });
-    
-    console.log(`📸 Found ${requestImages.length} images for request ${id}`);
-    
-    // Create backup entry with original request data
-    const requestData = request.toJSON();
-    
-    // Remove any fields that don't exist in backup table or might cause issues
+    // Build full backup payload from the request row
+    const requestData = request.get ? request.get({ plain: true }) : request.toJSON();
     const { createdAt, updatedAt, ...cleanRequestData } = requestData;
-    
-    // Add deletion metadata
+
     const backupData = {
       ...cleanRequestData,
       deletedAt: new Date(),
-      deletedBy: userId || null
+      deletedBy: userId || null,
     };
-    
-    console.log('📦 Moving request to backup table...');
-    console.log('Backup data keys:', Object.keys(backupData));
-    console.log('Sample backup data:', {
-      id: backupData.id,
-      vehicleNumber: backupData.vehicleNumber,
-      status: backupData.status,
-      deletedAt: backupData.deletedAt,
-      deletedBy: backupData.deletedBy
-    });
-    
-    // Insert into backup table using raw SQL for better control
+
+    // Map differing column names between requests and requestbackup
+    if (Object.prototype.hasOwnProperty.call(backupData, 'userSection')) {
+      backupData['Department'] = backupData.userSection;
+      delete backupData.userSection;
+    }
+    if (Object.prototype.hasOwnProperty.call(backupData, 'costCenter')) {
+      backupData['CostCenter'] = backupData.costCenter;
+      delete backupData.costCenter;
+    }
+
+    // Ensure optional columns exist (keeps dynamic insert consistent)
+    const optionalCols = [
+      'deliveryOfficeName',
+      'deliveryStreetName',
+      'deliveryTown',
+      'totalPrice',
+      'warrantyDistance',
+      'tireWearIndicatorAppeared',
+      'supplierName',
+      'supplierEmail',
+      'supplierPhone',
+      'orderNumber',
+      'orderNotes',
+      'orderPlacedDate',
+      'supervisor_notes',
+      'technical_manager_note',
+      'engineer_note',
+      'customer_officer_note',
+      'technical_manager_id',
+      'supervisor_decision_by',
+      'engineer_decision_by',
+      'customer_officer_decision_by',
+      'Department',
+      'CostCenter',
+    ];
+    for (const col of optionalCols) {
+      if (!Object.prototype.hasOwnProperty.call(backupData, col)) {
+        backupData[col] = null;
+      }
+    }
+
+    // Insert into requestbackup
     const backupFields = Object.keys(backupData);
     const backupValues = Object.values(backupData);
     const placeholders = backupFields.map(() => '?').join(', ');
     const fieldNames = backupFields.join(', ');
+
+    await connection.query(
+      `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
+      backupValues
+    );
+    console.log('✅ Request backed up to requestbackup table');
+
+    // Get all request images before deletion
+    const requestImages = await RequestImage.findAll({
+      where: { requestId: id },
+    });
+
+    // Create request_images_backup table if it doesn't exist
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS request_images_backup (
+        id INT PRIMARY KEY,
+        requestId INT NOT NULL,
+        imagePath TEXT NOT NULL,
+        imageIndex INT NOT NULL,
+        deletedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_backup_request_id (requestId),
+        INDEX idx_backup_deleted_at (deletedAt)
+      )
+    `);
     
-    console.log('🔍 SQL: INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})');
-    
-    try {
+    // Insert images into backup table
+    for (const image of requestImages) {
       await connection.query(
-        `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
-        backupValues
+        `INSERT INTO request_images_backup (id, requestId, imagePath, imageIndex, deletedAt) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [image.id, image.requestId, image.imagePath, image.imageIndex, new Date()]
       );
-      console.log('✅ Request moved to backup table successfully');
-    } catch (insertError) {
-      console.error('❌ Error inserting into backup table:', insertError);
-      console.error('SQL Error details:', {
-        code: insertError.code,
-        errno: insertError.errno,
-        sqlMessage: insertError.sqlMessage,
-        sql: insertError.sql
-      });
-      
-      // Try a simpler insert with only essential fields
-      console.log('🔄 Trying simplified backup insert...');
-      const essentialData = {
-        id: request.id,
-        userId: request.userId,
-        vehicleId: request.vehicleId,
-        vehicleNumber: request.vehicleNumber,
-        quantity: request.quantity,
-        tubesQuantity: request.tubesQuantity,
-        tireSize: request.tireSize,
-        requestReason: request.requestReason,
-        requesterName: request.requesterName,
-        requesterEmail: request.requesterEmail,
-        requesterPhone: request.requesterPhone,
-        vehicleBrand: request.vehicleBrand,
-        vehicleModel: request.vehicleModel,
-        lastReplacementDate: request.lastReplacementDate,
-        existingTireMake: request.existingTireMake,
-        tireSizeRequired: request.tireSizeRequired,
-        presentKmReading: request.presentKmReading,
-        previousKmReading: request.previousKmReading,
-        tireWearPattern: request.tireWearPattern,
-        comments: request.comments,
-        status: request.status,
-        submittedAt: request.submittedAt,
-        supervisorId: request.supervisorId,
-        deletedAt: new Date(),
-        deletedBy: userId || null
-      };
-      
-      const essentialFields = Object.keys(essentialData);
-      const essentialValues = Object.values(essentialData);
-      const essentialPlaceholders = essentialFields.map(() => '?').join(', ');
-      const essentialFieldNames = essentialFields.join(', ');
-      
-      await connection.query(
-        `INSERT INTO requestbackup (${essentialFieldNames}) VALUES (${essentialPlaceholders})`,
-        essentialValues
-      );
-      console.log('✅ Request moved to backup table with essential fields');
     }
     
-    // Create backup entries for request images if they exist
-    if (requestImages.length > 0) {
-      console.log(`📸 Backing up ${requestImages.length} request images...`);
-      
-      // Create request_images_backup table if it doesn't exist
-      await connection.query(`
-        CREATE TABLE IF NOT EXISTS request_images_backup (
-          id INT PRIMARY KEY,
-          requestId INT NOT NULL,
-          imagePath TEXT NOT NULL,
-          imageIndex INT NOT NULL,
-          deletedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_backup_request_id (requestId),
-          INDEX idx_backup_deleted_at (deletedAt)
-        )
-      `);
-      
-      // Insert images into backup table
-      for (const image of requestImages) {
-        await connection.query(
-          `INSERT INTO request_images_backup (id, requestId, imagePath, imageIndex, deletedAt) 
-           VALUES (?, ?, ?, ?, ?)`,
-          [image.id, image.requestId, image.imagePath, image.imageIndex, new Date()]
-        );
-      }
-      
-      console.log('✅ Request images backed up successfully');
-    }
+    console.log('✅ Request images backed up successfully');
     
     // Delete request images from original table
     if (requestImages.length > 0) {
