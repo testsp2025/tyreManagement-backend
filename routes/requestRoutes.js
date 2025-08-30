@@ -32,6 +32,9 @@ router.get("/deleted", requestController.getDeletedRequests);
 // Get deleted requests for a specific user
 router.get("/deleted/user/:userId", requestController.getDeletedRequestsByUser);
 
+// Get a single deleted request by ID (must be before dynamic :id)
+router.get("/deleted/:id", requestController.getDeletedRequestById);
+
 // Get requests by user
 router.get("/user/:id", requestController.getRequestsByUser);
 

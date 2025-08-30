@@ -1402,6 +1402,43 @@ exports.getDeletedRequestsByUser = async (req, res) => {
   }
 };
 
+// Get one deleted request (from backup) with images
+exports.getDeletedRequestById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Fetch the deleted request row from requestbackup
+    const [rows] = await pool.query(
+      `SELECT rb.* FROM requestbackup rb WHERE rb.id = ? LIMIT 1`,
+      [id]
+    );
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Deleted request not found' });
+    }
+
+    const deletedRequest = rows[0];
+
+    // Fetch backup images for this request
+    const [images] = await pool.query(
+      `SELECT imagePath, imageIndex FROM request_images_backup WHERE requestId = ? ORDER BY imageIndex ASC`,
+      [id]
+    );
+
+    // Normalize field names for frontend convenience
+    const response = {
+      ...deletedRequest,
+      images: images.map(i => i.imagePath),
+      Department: deletedRequest.Department ?? null,
+      CostCenter: deletedRequest.CostCenter ?? null,
+      isDeleted: true,
+    };
+
+    return res.json({ success: true, data: response });
+  } catch (error) {
+    console.error('Error fetching deleted request by id:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
+
 // Test endpoint for debugging soft delete
 exports.testBackupCount = async (req, res) => {
   try {
