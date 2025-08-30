@@ -1301,6 +1301,7 @@ exports.getDeletedRequestsByUser = async (req, res) => {
       vehicleNumber,
       startDate,
       endDate,
+      requesterName,
       sortBy = 'deletedAt',
       sortOrder = 'DESC'
     } = req.query;
@@ -1326,6 +1327,11 @@ exports.getDeletedRequestsByUser = async (req, res) => {
     if (vehicleNumber) {
       whereConditions.push('rb.vehicleNumber LIKE ?');
       queryParams.push(`%${vehicleNumber}%`);
+    }
+    
+    if (requesterName) {
+      whereConditions.push('rb.requesterName LIKE ?');
+      queryParams.push(`%${requesterName}%`);
     }
     
     if (startDate) {
