@@ -29,8 +29,11 @@ router.get("/", requestController.getAllRequests);
 // Get deleted requests from backup
 router.get("/deleted", requestController.getDeletedRequests);
 
-// Get deleted requests for a specific user
+// Get deleted requests for a specific user (must come before '/deleted/:id')
 router.get("/deleted/user/:userId", requestController.getDeletedRequestsByUser);
+
+// Get a single deleted request by ID (from backup)
+router.get("/deleted/:id", requestController.getDeletedRequestById);
 
 // Get requests by user
 router.get("/user/:id", requestController.getRequestsByUser);
