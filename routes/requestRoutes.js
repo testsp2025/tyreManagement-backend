@@ -56,6 +56,9 @@ router.get("/vehicle/:vehicleNumber", requestController.getRequestsByVehicleNumb
 // Get deleted requests from backup
 router.get("/deleted", requestController.getDeletedRequests);
 
+// Get deleted requests for a specific user
+router.get("/deleted/user/:userId", requestController.getDeletedRequestsByUser);
+
 // Restore a deleted request
 router.post("/restore/:id", requestController.restoreDeletedRequest);
 

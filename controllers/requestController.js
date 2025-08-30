@@ -1013,30 +1013,107 @@ exports.getRequestsByVehicleNumber = async (req, res) => {
   }
 };
 
-// Get deleted requests from backup table
+// Get deleted requests from backup table with advanced filtering
 exports.getDeletedRequests = async (req, res) => {
   try {
-    console.log('Fetching deleted requests from backup table...');
+    console.log('🗃️ Fetching deleted requests from backup table with filters...');
     
-    // Fetch deleted requests with optional pagination
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = (page - 1) * limit;
+    // Extract query parameters for filtering
+    const {
+      page = 1,
+      limit = 50,
+      vehicleNumber,
+      status,
+      requesterName,
+      startDate,
+      endDate,
+      deletedBy,
+      sortBy = 'deletedAt',
+      sortOrder = 'DESC'
+    } = req.query;
     
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build WHERE clause for filtering
+    let whereConditions = [];
+    let queryParams = [];
+    
+    if (vehicleNumber) {
+      whereConditions.push('rb.vehicleNumber LIKE ?');
+      queryParams.push(`%${vehicleNumber}%`);
+    }
+    
+    if (status) {
+      whereConditions.push('rb.status = ?');
+      queryParams.push(status);
+    }
+    
+    if (requesterName) {
+      whereConditions.push('rb.requesterName LIKE ?');
+      queryParams.push(`%${requesterName}%`);
+    }
+    
+    if (startDate) {
+      whereConditions.push('DATE(rb.deletedAt) >= ?');
+      queryParams.push(startDate);
+    }
+    
+    if (endDate) {
+      whereConditions.push('DATE(rb.deletedAt) <= ?');
+      queryParams.push(endDate);
+    }
+    
+    if (deletedBy) {
+      whereConditions.push('rb.deletedBy = ?');
+      queryParams.push(deletedBy);
+    }
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    // Validate sort parameters
+    const validSortFields = ['deletedAt', 'submittedAt', 'vehicleNumber', 'status', 'requesterName'];
+    const validSortOrders = ['ASC', 'DESC'];
+    const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'deletedAt';
+    const safeSortOrder = validSortOrders.includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+    
+    // Build the main query
+    const mainQuery = `
+      SELECT 
+        rb.*,
+        u.name as deletedByName,
+        DATE_FORMAT(rb.deletedAt, '%Y-%m-%d %H:%i:%s') as formattedDeletedAt,
+        DATE_FORMAT(rb.submittedAt, '%Y-%m-%d %H:%i:%s') as formattedSubmittedAt,
+        DATEDIFF(NOW(), rb.deletedAt) as daysSinceDeleted
+      FROM requestbackup rb
+      LEFT JOIN users u ON rb.deletedBy = u.id
+      ${whereClause}
+      ORDER BY rb.${safeSortBy} ${safeSortOrder}
+      LIMIT ? OFFSET ?
+    `;
+    
+    // Build the count query
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM requestbackup rb
+      ${whereClause}
+    `;
+    
+    console.log('🔍 Executing queries with filters:', {
+      vehicleNumber,
+      status,
+      requesterName,
+      dateRange: { startDate, endDate },
+      pagination: { page, limit, offset },
+      sorting: { sortBy: safeSortBy, sortOrder: safeSortOrder }
+    });
+    
+    // Execute queries
     const [deletedRequests, [{ total }]] = await Promise.all([
-      pool.query(`
-        SELECT 
-          rb.*,
-          u.name as deletedByName
-        FROM requestbackup rb
-        LEFT JOIN users u ON rb.deletedBy = u.id
-        ORDER BY rb.deletedAt DESC
-        LIMIT ? OFFSET ?
-      `, [limit, offset]),
-      pool.query('SELECT COUNT(*) as total FROM requestbackup')
+      pool.query(mainQuery, [...queryParams, parseInt(limit), offset]),
+      pool.query(countQuery, queryParams)
     ]);
     
-    console.log(`Found ${deletedRequests[0].length} deleted requests (page ${page})`);
+    console.log(`📊 Found ${deletedRequests[0].length} deleted requests (page ${page} of ${Math.ceil(total / limit)})`);
     
     // Get images for deleted requests from backup table
     const requestsWithImages = await Promise.all(
@@ -1054,33 +1131,78 @@ exports.getDeletedRequests = async (req, res) => {
           return {
             ...request,
             images: imageUrls,
-            isDeleted: true
+            isDeleted: true,
+            canRestore: true
           };
         } catch (imageError) {
-          console.log(`No backup images found for request ${request.id}:`, imageError.message);
+          console.log(`⚠️ No backup images found for request ${request.id}:`, imageError.message);
           return {
             ...request,
             images: [],
-            isDeleted: true
+            isDeleted: true,
+            canRestore: true
           };
         }
       })
     );
     
+    // Calculate additional statistics
+    const [statusStats] = await pool.query(`
+      SELECT 
+        status,
+        COUNT(*) as count
+      FROM requestbackup rb
+      ${whereClause ? whereClause.replace('WHERE', 'WHERE') : ''}
+      GROUP BY status
+      ORDER BY count DESC
+    `, queryParams);
+    
+    const [deletionStats] = await pool.query(`
+      SELECT 
+        DATE(deletedAt) as deleteDate,
+        COUNT(*) as count
+      FROM requestbackup rb
+      ${whereClause}
+      GROUP BY DATE(deletedAt)
+      ORDER BY deleteDate DESC
+      LIMIT 30
+    `, queryParams);
+    
     res.json({
       success: true,
       data: requestsWithImages,
       pagination: {
-        page,
-        limit,
+        page: parseInt(page),
+        limit: parseInt(limit),
         total: total,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit),
+        hasNext: (parseInt(page) * parseInt(limit)) < total,
+        hasPrev: parseInt(page) > 1
+      },
+      filters: {
+        vehicleNumber: vehicleNumber || null,
+        status: status || null,
+        requesterName: requesterName || null,
+        dateRange: {
+          startDate: startDate || null,
+          endDate: endDate || null
+        },
+        deletedBy: deletedBy || null
+      },
+      sorting: {
+        sortBy: safeSortBy,
+        sortOrder: safeSortOrder
+      },
+      statistics: {
+        byStatus: statusStats[0] || [],
+        byDeletionDate: deletionStats[0] || [],
+        totalDeleted: total
       },
       message: `Found ${requestsWithImages.length} deleted requests`
     });
     
   } catch (error) {
-    console.error('Error fetching deleted requests:', {
+    console.error('❌ Error fetching deleted requests:', {
       error: error.message,
       stack: error.stack
     });
@@ -1101,7 +1223,7 @@ exports.restoreDeletedRequest = async (req, res) => {
     const { id } = req.params;
     const { userId } = req.body; // User performing the restoration
     
-    console.log(`Starting restoration of deleted request ID: ${id}`);
+    console.log(`🔄 Starting restoration of deleted request ID: ${id}`);
     
     // Start transaction
     await connection.beginTransaction();
@@ -1150,7 +1272,7 @@ exports.restoreDeletedRequest = async (req, res) => {
       values
     );
     
-    console.log('Request restored to main table');
+    console.log('✅ Request restored to main table');
     
     // Restore images if they exist in backup
     const [backupImages] = await connection.query(
@@ -1159,7 +1281,7 @@ exports.restoreDeletedRequest = async (req, res) => {
     );
     
     if (backupImages.length > 0) {
-      console.log(`Restoring ${backupImages.length} images...`);
+      console.log(`📸 Restoring ${backupImages.length} images...`);
       
       for (const image of backupImages) {
         const { deletedAt, ...imageData } = image;
@@ -1175,18 +1297,18 @@ exports.restoreDeletedRequest = async (req, res) => {
         [id]
       );
       
-      console.log('Images restored successfully');
+      console.log('✅ Images restored successfully');
     }
     
     // Remove from backup table
     await connection.query('DELETE FROM requestbackup WHERE id = ?', [id]);
     
-    console.log('Request removed from backup table');
+    console.log('✅ Request removed from backup table');
     
     // Commit transaction
     await connection.commit();
     
-    console.log(`Request restoration completed successfully for ID: ${id}`);
+    console.log(`🎉 Request restoration completed successfully for ID: ${id}`);
     
     res.json({
       success: true,
@@ -1197,7 +1319,7 @@ exports.restoreDeletedRequest = async (req, res) => {
     
   } catch (error) {
     await connection.rollback();
-    console.error("Error restoring deleted request:", error);
+    console.error("❌ Error restoring deleted request:", error);
     
     res.status(500).json({
       success: false,
@@ -1207,6 +1329,115 @@ exports.restoreDeletedRequest = async (req, res) => {
     });
   } finally {
     connection.release();
+  }
+};
+
+// Get deleted requests for a specific user
+exports.getDeletedRequestsByUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      vehicleNumber,
+      startDate,
+      endDate
+    } = req.query;
+    
+    console.log(`🗃️ Fetching deleted requests for user ID: ${userId}`);
+    
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build WHERE clause for user-specific filtering
+    let whereConditions = ['rb.userId = ?'];
+    let queryParams = [userId];
+    
+    if (status) {
+      whereConditions.push('rb.status = ?');
+      queryParams.push(status);
+    }
+    
+    if (vehicleNumber) {
+      whereConditions.push('rb.vehicleNumber LIKE ?');
+      queryParams.push(`%${vehicleNumber}%`);
+    }
+    
+    if (startDate) {
+      whereConditions.push('DATE(rb.deletedAt) >= ?');
+      queryParams.push(startDate);
+    }
+    
+    if (endDate) {
+      whereConditions.push('DATE(rb.deletedAt) <= ?');
+      queryParams.push(endDate);
+    }
+    
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+    
+    const [deletedRequests, [{ total }]] = await Promise.all([
+      pool.query(`
+        SELECT 
+          rb.*,
+          u.name as deletedByName,
+          DATE_FORMAT(rb.deletedAt, '%Y-%m-%d %H:%i:%s') as formattedDeletedAt,
+          DATEDIFF(NOW(), rb.deletedAt) as daysSinceDeleted
+        FROM requestbackup rb
+        LEFT JOIN users u ON rb.deletedBy = u.id
+        ${whereClause}
+        ORDER BY rb.deletedAt DESC
+        LIMIT ? OFFSET ?
+      `, [...queryParams, parseInt(limit), offset]),
+      pool.query(`SELECT COUNT(*) as total FROM requestbackup rb ${whereClause}`, queryParams)
+    ]);
+    
+    // Add images to requests
+    const requestsWithImages = await Promise.all(
+      deletedRequests[0].map(async (request) => {
+        try {
+          const [images] = await pool.query(`
+            SELECT imagePath, imageIndex 
+            FROM request_images_backup 
+            WHERE requestId = ? 
+            ORDER BY imageIndex ASC
+          `, [request.id]);
+          
+          return {
+            ...request,
+            images: images.map(img => img.imagePath),
+            isDeleted: true,
+            canRestore: true
+          };
+        } catch (imageError) {
+          return {
+            ...request,
+            images: [],
+            isDeleted: true,
+            canRestore: true
+          };
+        }
+      })
+    );
+    
+    res.json({
+      success: true,
+      data: requestsWithImages,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total,
+        totalPages: Math.ceil(total / limit)
+      },
+      message: `Found ${requestsWithImages.length} deleted requests for user ${userId}`
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching user deleted requests:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching deleted requests',
+      error: error.message
+    });
   }
 };
 
