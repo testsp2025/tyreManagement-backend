@@ -788,14 +788,38 @@ exports.deleteRequest = async (req, res) => {
     };
 
     // Map differing column names between requests and requestbackup
-    if (Object.prototype.hasOwnProperty.call(backupData, 'userSection')) {
-      backupData['Department'] = backupData.userSection;
-      delete backupData.userSection;
-    }
-    if (Object.prototype.hasOwnProperty.call(backupData, 'costCenter')) {
-      backupData['CostCenter'] = backupData.costCenter;
-      delete backupData.costCenter;
-    }
+    // Be robust: pull from either attribute names or raw DB column keys if present
+    const deptFromAttr = Object.prototype.hasOwnProperty.call(backupData, 'userSection')
+      ? backupData.userSection
+      : undefined;
+    const deptFromColumn = Object.prototype.hasOwnProperty.call(backupData, 'Department')
+      ? backupData.Department
+      : undefined;
+    const costFromAttr = Object.prototype.hasOwnProperty.call(backupData, 'costCenter')
+      ? backupData.costCenter
+      : undefined;
+    const costFromColumn = Object.prototype.hasOwnProperty.call(backupData, 'CostCenter')
+      ? backupData.CostCenter
+      : undefined;
+
+    // Final values prefer attribute, then existing column key, else null
+    const finalDepartment = (deptFromAttr ?? deptFromColumn ?? null);
+    const finalCostCenter = (costFromAttr ?? costFromColumn ?? null);
+
+    // Set normalized keys for insert and remove attribute keys to avoid duplicates
+    backupData['Department'] = finalDepartment;
+    backupData['CostCenter'] = finalCostCenter;
+    if (Object.prototype.hasOwnProperty.call(backupData, 'userSection')) delete backupData.userSection;
+    if (Object.prototype.hasOwnProperty.call(backupData, 'costCenter')) delete backupData.costCenter;
+
+    console.log('🧭 Soft-delete mapping:', {
+      original_userSection: deptFromAttr,
+      original_Department: deptFromColumn,
+      original_costCenter: costFromAttr,
+      original_CostCenter: costFromColumn,
+      mapped_Department: backupData['Department'],
+      mapped_CostCenter: backupData['CostCenter']
+    });
 
     // Ensure optional columns exist (keeps dynamic insert consistent)
     const optionalCols = [
@@ -833,6 +857,12 @@ exports.deleteRequest = async (req, res) => {
     const backupValues = Object.values(backupData);
     const placeholders = backupFields.map(() => '?').join(', ');
     const fieldNames = backupFields.join(', ');
+
+    // Log the specific fields being inserted for Department/CostCenter
+    console.log('🧾 Inserting into requestbackup with Department/CostCenter:', {
+      Department: backupData['Department'],
+      CostCenter: backupData['CostCenter']
+    });
 
     await connection.query(
       `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
