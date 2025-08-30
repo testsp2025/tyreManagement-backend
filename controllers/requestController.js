@@ -1300,15 +1300,17 @@ exports.getDeletedRequestsByUser = async (req, res) => {
       status,
       vehicleNumber,
       startDate,
-      endDate
+      endDate,
+      sortBy = 'deletedAt',
+      sortOrder = 'DESC'
     } = req.query;
     
-    console.log(`🗃️ Fetching deleted requests for user ID: ${userId}`);
+    console.log(` Fetching deleted requests for user ID: ${userId}`);
     console.log('Query parameters:', req.query);
     
     // Test if table has data for this user
     const [userTest] = await pool.query('SELECT COUNT(*) as count FROM requestbackup WHERE userId = ?', [userId]);
-    console.log(`📊 Total records for user ${userId} in requestbackup:`, userTest[0].count);
+    console.log(` Total records for user ${userId} in requestbackup:`, userTest[0].count);
     
     const offset = (parseInt(page) - 1) * parseInt(limit);
     
@@ -1337,20 +1339,26 @@ exports.getDeletedRequestsByUser = async (req, res) => {
     }
     
     const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+    // Validate sort parameters
+    const validSortFields = ['deletedAt', 'submittedAt', 'vehicleNumber', 'status', 'requesterName'];
+    const validSortOrders = ['ASC', 'DESC'];
+    const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'deletedAt';
+    const safeSortOrder = validSortOrders.includes(String(sortOrder).toUpperCase()) ? String(sortOrder).toUpperCase() : 'DESC';
     
     const [deletedRequests, [{ total }]] = await Promise.all([
       pool.query(`
         SELECT rb.*
         FROM requestbackup rb
         ${whereClause}
-        ORDER BY rb.deletedAt DESC
+        ORDER BY rb.${safeSortBy} ${safeSortOrder}
         LIMIT ? OFFSET ?
       `, [...queryParams, parseInt(limit), offset]),
       pool.query(`SELECT COUNT(*) as total FROM requestbackup rb ${whereClause}`, queryParams)
     ]);
     
-    console.log(`📊 Raw results for user ${userId}:`, deletedRequests[0]);
-    console.log(`📊 Total count for user ${userId}:`, total);
+    console.log(` Raw results for user ${userId}:`, deletedRequests[0]);
+    console.log(` Total count for user ${userId}:`, total);
     
     // Add images to requests - simplified
     const requestsWithImages = deletedRequests[0].map((request) => {
@@ -1370,13 +1378,19 @@ exports.getDeletedRequestsByUser = async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total: total,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit),
+        hasNext: (parseInt(page) * parseInt(limit)) < total,
+        hasPrev: parseInt(page) > 1
+      },
+      sorting: {
+        sortBy: safeSortBy,
+        sortOrder: safeSortOrder
       },
       message: `Found ${requestsWithImages.length} deleted requests for user ${userId}`
     });
     
   } catch (error) {
-    console.error('❌ Error fetching user deleted requests:', error);
+    console.error(' Error fetching user deleted requests:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching deleted requests',

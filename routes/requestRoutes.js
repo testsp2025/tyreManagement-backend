@@ -26,14 +26,11 @@ router.post("/requests", requestController.createRequest);
 // Get all requests
 router.get("/", requestController.getAllRequests);
 
-// Get a single request
-router.get("/:id", requestController.getRequestById);
+// Get deleted requests from backup
+router.get("/deleted", requestController.getDeletedRequests);
 
-// Update request status
-router.put("/:id/status", requestController.updateRequestStatus);
-
-// Update entire request (for editing pending requests)
-router.put("/:id", requestController.updateRequest);
+// Get deleted requests for a specific user
+router.get("/deleted/user/:userId", requestController.getDeletedRequestsByUser);
 
 // Get requests by user
 router.get("/user/:id", requestController.getRequestsByUser);
@@ -44,25 +41,28 @@ router.get(
   requestController.checkVehicleRestrictions
 );
 
+// Get requests by vehicle number
+router.get("/vehicle/:vehicleNumber", requestController.getRequestsByVehicleNumber);
+
+// Update request status
+router.put("/:id/status", requestController.updateRequestStatus);
+
+// Update entire request (for editing pending requests)
+router.put("/:id", requestController.updateRequest);
+
 // Place order for an approved request
 router.post("/:id/place-order", requestController.placeOrder);
 
 // Delete a request
 router.delete("/:id", requestController.deleteRequest);
 
-// Get requests by vehicle number
-router.get("/vehicle/:vehicleNumber", requestController.getRequestsByVehicleNumber);
-
-// Get deleted requests from backup
-router.get("/deleted", requestController.getDeletedRequests);
-
-// Get deleted requests for a specific user
-router.get("/deleted/user/:userId", requestController.getDeletedRequestsByUser);
-
 // Restore a deleted request
 router.post("/restore/:id", requestController.restoreDeletedRequest);
 
 // Test endpoint for debugging soft delete
 router.get("/test/backup-count", requestController.testBackupCount);
+
+// Get a single request (keep dynamic route LAST to avoid shadowing more specific routes)
+router.get("/:id", requestController.getRequestById);
 
 module.exports = router;
