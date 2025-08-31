@@ -803,8 +803,24 @@ exports.deleteRequest = async (req, res) => {
       ...cleanRequestData,
       deletedAt: new Date(),
       deletedBy: userId || null,
-      deletedByRole: finalUserRole || null,
     };
+    
+    // Only add deletedByRole if the column exists in the database
+    try {
+      // Check if the deletedByRole column exists
+      const [columnCheck] = await connection.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requestbackup' AND COLUMN_NAME = 'deletedByRole'"
+      );
+      
+      if (columnCheck.length > 0) {
+        backupData.deletedByRole = finalUserRole || null;
+        console.log('✅ deletedByRole column exists, adding role to backup data');
+      } else {
+        console.log('⚠️  deletedByRole column does not exist, skipping role in backup');
+      }
+    } catch (columnError) {
+      console.warn('⚠️  Could not check for deletedByRole column:', columnError.message);
+    }
 
     // Map differing column names between requests and requestbackup
     // Be robust: pull from either attribute names or raw DB column keys if present
@@ -864,8 +880,12 @@ exports.deleteRequest = async (req, res) => {
       'customer_officer_decision_by',
       'Department',
       'CostCenter',
-      'deletedByRole',
     ];
+    
+    // Only add deletedByRole to optional columns if it's already in backupData
+    if (Object.prototype.hasOwnProperty.call(backupData, 'deletedByRole')) {
+      optionalCols.push('deletedByRole');
+    }
     for (const col of optionalCols) {
       if (!Object.prototype.hasOwnProperty.call(backupData, col)) {
         backupData[col] = null;
@@ -1093,9 +1113,23 @@ exports.getDeletedRequests = async (req, res) => {
       queryParams.push(deletedBy);
     }
     
+    // Only add deletedByRole filter if the column exists and filter is provided
     if (deletedByRole) {
-      whereConditions.push('rb.deletedByRole = ?');
-      queryParams.push(deletedByRole);
+      try {
+        const [columnCheck] = await pool.query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requestbackup' AND COLUMN_NAME = 'deletedByRole'"
+        );
+        
+        if (columnCheck.length > 0) {
+          whereConditions.push('rb.deletedByRole = ?');
+          queryParams.push(deletedByRole);
+          console.log('✅ Using deletedByRole filter');
+        } else {
+          console.log('⚠️  deletedByRole column does not exist, skipping role filter');
+        }
+      } catch (columnError) {
+        console.warn('⚠️  Could not check for deletedByRole column, skipping role filter:', columnError.message);
+      }
     }
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
