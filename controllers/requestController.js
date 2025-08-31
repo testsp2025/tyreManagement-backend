@@ -99,7 +99,7 @@ exports.createRequest = async (req, res) => {
     // Check for pending requests
     if (existingRequests.length > 0) {
       return res.status(400).json({
-        error: `Vehicle ${requestData.vehicleNumber} already has a pending tire request. Please wait for the current request to be processed before submitting a new one.`,
+        error: `Vehicle ${requestData.vehicleNumber} already has a user requested tire. Please wait for the current request to be processed before submitting a new one.`,
         existingRequestId: existingRequests[0].id,
         existingRequestStatus: existingRequests[0].status
       });
@@ -485,7 +485,7 @@ exports.checkVehicleRestrictions = async (req, res) => {
       return res.json({
         restricted: true,
         type: 'pending',
-        message: `Vehicle ${vehicleNumber} already has a pending tire request. Please wait for the current request to be processed before submitting a new one.`,
+        message: `Vehicle ${vehicleNumber} already has a user requested tire. Please wait for the current request to be processed before submitting a new one.`,
         existingRequestId: existingRequests[0].id,
         existingRequestStatus: existingRequests[0].status
       });
