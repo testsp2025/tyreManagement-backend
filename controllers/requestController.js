@@ -248,6 +248,7 @@ exports.updateRequestStatus = async (req, res) => {
       "supervisor approved",
       "technical-manager approved",
       "engineer approved",
+      "Engineer Approved",
       "customer-officer approved",
       "approved",
       "rejected",
@@ -302,6 +303,7 @@ exports.updateRequestStatus = async (req, res) => {
     }
     if (
       status === "engineer approved" ||
+      status === "Engineer Approved" ||
       status === "complete" ||
       status === "engineer rejected"
     ) {
@@ -362,6 +364,7 @@ exports.updateRequestStatus = async (req, res) => {
       }
       if (
         status === "engineer approved" ||
+        status === "Engineer Approved" ||
         status === "complete" ||
         status === "engineer rejected"
       ) {
@@ -475,7 +478,7 @@ exports.checkVehicleRestrictions = async (req, res) => {
       where: {
         vehicleNumber: vehicleNumber,
         status: {
-          [require('sequelize').Op.notIn]: ['rejected', 'complete', 'order placed']
+          [require('sequelize').Op.notIn]: ['rejected', 'complete', 'Engineer Approved', 'order placed']
         }
       },
       order: [['submittedAt', 'DESC']]
@@ -499,7 +502,7 @@ exports.checkVehicleRestrictions = async (req, res) => {
       where: {
         vehicleNumber: vehicleNumber,
         status: {
-          [require('sequelize').Op.in]: ['complete', 'order placed']
+          [require('sequelize').Op.in]: ['complete', 'Engineer Approved', 'order placed']
         },
         submittedAt: {
           [require('sequelize').Op.gte]: thirtyDaysAgo
@@ -582,10 +585,10 @@ exports.placeOrder = async (req, res) => {
       orderNotes: orderNotes
     });
 
-    // Check if request is complete (ready for order)
-    if (request.status !== "complete") {
+    // Check if request is Engineer Approved (ready for order)
+    if (request.status !== "Engineer Approved" && request.status !== "complete") {
       return res.status(400).json({
-        error: "Request must be complete before placing order",
+        error: "Request must be Engineer Approved before placing order",
         currentStatus: request.status,
       });
     }
