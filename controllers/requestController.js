@@ -1277,11 +1277,27 @@ exports.restoreDeletedRequest = async (req, res) => {
     }
     
     // Prepare data for restoration (remove backup-specific fields)
-    const { deletedAt, deletedBy, ...requestData } = backupRequest;
+    const { deletedAt, deletedBy, deletedByRole, ...requestData } = backupRequest;
+    
+    // Get the main table structure to ensure compatibility
+    const [mainTableColumns] = await connection.query('DESCRIBE requests');
+    const validColumns = mainTableColumns.map(col => col.Field);
+    
+    // Filter out any fields that don't exist in the main table
+    const compatibleData = {};
+    Object.keys(requestData).forEach(key => {
+      if (validColumns.includes(key)) {
+        compatibleData[key] = requestData[key];
+      } else {
+        console.log(`⚠️  Skipping field '${key}' - not found in main table`);
+      }
+    });
+    
+    console.log(`🔄 Restoring ${Object.keys(compatibleData).length} compatible fields`);
     
     // Restore to main requests table
-    const fields = Object.keys(requestData);
-    const values = Object.values(requestData);
+    const fields = Object.keys(compatibleData);
+    const values = Object.values(compatibleData);
     const placeholders = fields.map(() => '?').join(', ');
     const fieldNames = fields.join(', ');
     
