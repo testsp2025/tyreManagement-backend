@@ -1239,9 +1239,10 @@ exports.restoreDeletedRequest = async (req, res) => {
   
   try {
     const { id } = req.params;
-    const { userId } = req.body; // User performing the restoration
+    const { userId, userRole } = req.body; // User performing the restoration
     
     console.log(`🔄 Starting restoration of deleted request ID: ${id}`);
+    console.log(`👤 Restoration requested by user ID: ${userId}, role: ${userRole}`);
     
     // Start transaction
     await connection.beginTransaction();
@@ -1261,6 +1262,29 @@ exports.restoreDeletedRequest = async (req, res) => {
     }
     
     const backupRequest = backupRequests[0];
+    
+    // Role-based authorization check: Only allow restore if user's role matches the deletedByRole
+    if (backupRequest.deletedByRole && userRole) {
+      if (backupRequest.deletedByRole !== userRole) {
+        await connection.rollback();
+        console.log(`🚫 Access denied: User role '${userRole}' cannot restore request deleted by role '${backupRequest.deletedByRole}'`);
+        return res.status(403).json({ 
+          success: false,
+          message: `Access denied: Only users with '${backupRequest.deletedByRole}' role can restore this request`,
+          deletedByRole: backupRequest.deletedByRole,
+          userRole: userRole
+        });
+      }
+    } else if (backupRequest.deletedByRole && !userRole) {
+      // If deletedByRole exists but userRole is not provided
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        message: "User role is required for authorization" 
+      });
+    }
+    
+    console.log(`✅ Authorization passed: User role '${userRole}' matches deletion role '${backupRequest.deletedByRole}'`);
     
     // Check if a request with this ID already exists in the main table
     const [existingRequests] = await connection.query(
