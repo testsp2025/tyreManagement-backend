@@ -165,6 +165,11 @@ const RequestBackup = sequelize.define(
         key: "id",
       },
     },
+    deletedByRole: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: 'Role of the user who deleted this request (user, supervisor, technical-manager, engineer, customer-officer)'
+    },
   },
   {
     tableName: "requestbackup",
@@ -178,6 +183,9 @@ const RequestBackup = sequelize.define(
       },
       {
         fields: ['vehicleNumber']
+      },
+      {
+        fields: ['deletedByRole']
       }
     ]
   }

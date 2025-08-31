@@ -759,9 +759,9 @@ exports.deleteRequest = async (req, res) => {
   
   try {
     const id = req.params.id;
-    const { userId } = req.body; // Optional: to track who deleted the request
+    const { userId, userRole } = req.body; // Extract both userId and userRole
     
-    console.log(`🗑️  DELETE REQUEST CALLED - ID: ${id}, UserID: ${userId}`);
+    console.log(`🗑️  DELETE REQUEST CALLED - ID: ${id}, UserID: ${userId}, UserRole: ${userRole}`);
     console.log('Request body:', req.body);
     console.log('Request params:', req.params);
     
@@ -780,6 +780,21 @@ exports.deleteRequest = async (req, res) => {
     console.log(`✅ Request found: ${request.id} - ${request.vehicleNumber}`);
     console.log(`🔄 Starting soft delete for request ID: ${id}`);
     
+    // If userRole is not provided but userId is, try to fetch it from the database
+    let finalUserRole = userRole;
+    if (userId && !userRole) {
+      try {
+        const { User } = require('../models');
+        const user = await User.findByPk(userId);
+        if (user && user.role) {
+          finalUserRole = user.role;
+          console.log(`🔍 Retrieved user role from database: ${finalUserRole}`);
+        }
+      } catch (userFetchError) {
+        console.warn('⚠️  Could not fetch user role from database:', userFetchError.message);
+      }
+    }
+    
     // Build full backup payload from the request row
     const requestData = request.get ? request.get({ plain: true }) : request.toJSON();
     const { createdAt, updatedAt, ...cleanRequestData } = requestData;
@@ -788,6 +803,7 @@ exports.deleteRequest = async (req, res) => {
       ...cleanRequestData,
       deletedAt: new Date(),
       deletedBy: userId || null,
+      deletedByRole: finalUserRole || null,
     };
 
     // Map differing column names between requests and requestbackup
@@ -848,6 +864,7 @@ exports.deleteRequest = async (req, res) => {
       'customer_officer_decision_by',
       'Department',
       'CostCenter',
+      'deletedByRole',
     ];
     for (const col of optionalCols) {
       if (!Object.prototype.hasOwnProperty.call(backupData, col)) {
@@ -864,7 +881,9 @@ exports.deleteRequest = async (req, res) => {
     // Log the specific fields being inserted for Department/CostCenter
     console.log('🧾 Inserting into requestbackup with Department/CostCenter:', {
       Department: backupData['Department'],
-      CostCenter: backupData['CostCenter']
+      CostCenter: backupData['CostCenter'],
+      deletedBy: backupData['deletedBy'],
+      deletedByRole: backupData['deletedByRole']
     });
 
     await connection.query(
@@ -1033,6 +1052,7 @@ exports.getDeletedRequests = async (req, res) => {
       startDate,
       endDate,
       deletedBy,
+      deletedByRole,
       sortBy = 'deletedAt',
       sortOrder = 'DESC'
     } = req.query;
@@ -1071,6 +1091,11 @@ exports.getDeletedRequests = async (req, res) => {
     if (deletedBy) {
       whereConditions.push('rb.deletedBy = ?');
       queryParams.push(deletedBy);
+    }
+    
+    if (deletedByRole) {
+      whereConditions.push('rb.deletedByRole = ?');
+      queryParams.push(deletedByRole);
     }
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -1150,7 +1175,8 @@ exports.getDeletedRequests = async (req, res) => {
           startDate: startDate || null,
           endDate: endDate || null
         },
-        deletedBy: deletedBy || null
+        deletedBy: deletedBy || null,
+        deletedByRole: deletedByRole || null
       },
       sorting: {
         sortBy: safeSortBy,
