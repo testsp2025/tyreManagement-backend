@@ -1,5 +1,11 @@
 const RequestImage = require("../models/RequestImage");
-const { Request, RequestBackup } = require("../models");
+const {
+  Request,
+  RequestBackup,
+  Vehicle,
+  TireDetails,
+  User,
+} = require("../models");
 const { pool } = require("../config/db");
 const { sendOrderEmail } = require("../utils/orderEmailService");
 const { Op } = require("sequelize");
@@ -201,26 +207,62 @@ ORDER BY r.submittedAt DESC
 
 exports.getRequestById = async (req, res) => {
   try {
-    // Fetch the request
-    const request = await Request.findByPk(req.params.id);
-    if (!request) {
-      return res.status(404).json({ error: "Request not found" });
-    }
-
-    // Fetch related images
-    const images = await RequestImage.findAll({
-      where: { requestId: req.params.id },
-      order: [["imageIndex", "ASC"]],
+    const request = await Request.findByPk(req.params.id, {
+      include: [
+        {
+          model: Vehicle,
+          attributes: [
+            "department",
+            "costCentre",
+            "vehicleNumber",
+            "vehicleBrand",
+            "vehicleModel",
+          ],
+        },
+        {
+          model: TireDetails,
+          attributes: [
+            "currentMake",
+            "lastReplacement",
+            "currentKm",
+            "previousKm",
+            "kmDifference",
+            "wearPattern",
+            "tireWearIndicator",
+          ],
+        },
+        { model: User, attributes: ["name", "email", "phone"] },
+      ],
     });
 
-    // Map image paths to an array of URLs
-    const imageUrls = images.map((img) => img.imagePath);
+    if (!request) return res.status(404).json({ error: "Not found" });
 
-    // Add images to the response
-    res.json({ ...request.toJSON(), images: imageUrls });
-  } catch (error) {
-    console.error("Error in getRequestById:", error);
-    res.status(500).json({ error: "Internal server error" });
+    // Flatten and ensure all fields exist
+    const result = {
+      ...request.toJSON(),
+      department: request.Vehicle?.department ?? "",
+      costCentre: request.Vehicle?.costCentre ?? "",
+      vehicleNumber: request.Vehicle?.vehicleNumber ?? "",
+      vehicleBrand: request.Vehicle?.vehicleBrand ?? "",
+      vehicleModel: request.Vehicle?.vehicleModel ?? "",
+      currentMake: request.TireDetail?.currentMake ?? "",
+      lastReplacement: request.TireDetail?.lastReplacement ?? "",
+      currentKm: request.TireDetail?.currentKm ?? "",
+      previousKm: request.TireDetail?.previousKm ?? "",
+      kmDifference: request.TireDetail?.kmDifference ?? "",
+      wearPattern: request.TireDetail?.wearPattern ?? "",
+      tireWearIndicator: request.TireDetail?.tireWearIndicator ?? "",
+      deliveryOffice: request.deliveryOffice ?? "",
+      deliveryStreet: request.deliveryStreet ?? "",
+      requesterName: request.User?.name ?? "",
+      requesterEmail: request.User?.email ?? "",
+      requesterPhone: request.User?.phone ?? "",
+      // ...other fields as needed
+    };
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
 
@@ -1686,13 +1728,11 @@ exports.getDeletedRequestById = async (req, res) => {
     return res.json({ success: true, data: response });
   } catch (error) {
     console.error("Error fetching deleted request by id:", error);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Internal server error",
-        error: error.message,
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
 
