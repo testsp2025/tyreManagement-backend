@@ -804,12 +804,6 @@ exports.deleteRequest = async (req, res) => {
       deletedAt: new Date(),
       deletedBy: userId || null,
     };
-    // Normalize legacy 'pending' status to the new 'User Requested tire' value
-    // so archived rows reflect the updated status naming.
-    if (backupData.status === 'pending') {
-      backupData.status = 'User Requested tire';
-      console.log("🔁 Normalized backup status 'pending' -> 'User Requested tire'");
-    }
     
     // Only add deletedByRole if the column exists in the database
     try {
