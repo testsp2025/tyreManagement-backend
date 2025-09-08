@@ -799,10 +799,19 @@ exports.deleteRequest = async (req, res) => {
     const requestData = request.get ? request.get({ plain: true }) : request.toJSON();
     const { createdAt, updatedAt, ...cleanRequestData } = requestData;
 
+    // Ensure the status format is consistent
+    let status = cleanRequestData.status;
+    if (typeof status !== 'string') {
+      status = String(status);
+    }
+
     const backupData = {
       ...cleanRequestData,
+      status: status,
       deletedAt: new Date(),
       deletedBy: userId || null,
+      Department: cleanRequestData.userSection || cleanRequestData.Department || null,
+      CostCenter: cleanRequestData.costCenter || cleanRequestData.CostCenter || null
     };
     
     // Only add deletedByRole if the column exists in the database
@@ -890,6 +899,25 @@ exports.deleteRequest = async (req, res) => {
       if (!Object.prototype.hasOwnProperty.call(backupData, col)) {
         backupData[col] = null;
       }
+    }
+
+    // Log the request data for debugging
+    console.log('Request data being backed up:', {
+      id: backupData.id,
+      status: backupData.status,
+      vehicleNumber: backupData.vehicleNumber
+    });
+
+    // Make sure status is being properly handled
+    try {
+      // Try raw SQL first to see if there's any issue
+      await connection.query(
+        'SELECT status FROM requests WHERE id = ?',
+        [id]
+      );
+      console.log('✅ Status field validated successfully');
+    } catch (statusError) {
+      console.error('❌ Status field validation error:', statusError);
     }
 
     // Insert into requestbackup
