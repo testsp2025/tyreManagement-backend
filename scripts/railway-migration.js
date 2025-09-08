@@ -68,9 +68,12 @@ async function migrateToRailway() {
         comments TEXT,
         status ENUM(
           'pending',
+        status ENUM( -- Updated ENUM to remove 'pending'
+          'User Requested tire',
           'supervisor approved',
           'technical-manager approved',
           'engineer approved',
+          'Engineer Approved',
           'customer-officer approved',
           'approved',
           'rejected',
@@ -82,6 +85,7 @@ async function migrateToRailway() {
           'order placed',
           'order cancelled'
         ) DEFAULT 'pending',
+        ) DEFAULT 'User Requested tire',
         submittedAt DATETIME NOT NULL,
         supervisor_notes TEXT,
         technical_manager_note TEXT,
