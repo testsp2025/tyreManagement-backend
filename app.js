@@ -57,6 +57,10 @@ app.use("/api/tire-details", require("./routes/tireDetailsRoutes"));
 const userRoutes = require("./routes/userRoutes");
 app.use("/api/users", userRoutes);
 
+// Migration endpoint
+const { runMigration } = require('./controllers/migrationController');
+app.post('/api/migrate-status', runMigration);
+
 // Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({
