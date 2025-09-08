@@ -778,8 +778,8 @@ exports.deleteRequest = async (req, res) => {
     }
 
     // Convert any 'pending' status to 'User Requested tire' before backup
-    if (request.status === 'pending') {
-      request.status = 'User Requested tire';
+    if (request.status === 'User Requested tire') {
+      
       await request.save();
       console.log(`✅ Converted 'pending' status to 'User Requested tire' for request ID: ${id}`);
     }
