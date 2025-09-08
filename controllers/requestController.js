@@ -777,8 +777,12 @@ exports.deleteRequest = async (req, res) => {
     await connection.beginTransaction();
     console.log('✅ Transaction started');
     
-    // First, check if the request exists
-    const request = await Request.findByPk(id);
+    // First, check if the request exists and get it in raw JSON format
+    const request = await Request.findOne({
+      where: { id: id },
+      raw: true
+    });
+
     if (!request) {
       console.log(`❌ Request ID ${id} not found`);
       await connection.rollback();
@@ -786,6 +790,7 @@ exports.deleteRequest = async (req, res) => {
     }
     
     console.log(`✅ Request found: ${request.id} - ${request.vehicleNumber}`);
+    console.log(`📊 Request status: ${request.status}`);
     console.log(`🔄 Starting soft delete for request ID: ${id}`);
     
     // If userRole is not provided but userId is, try to fetch it from the database
@@ -803,39 +808,44 @@ exports.deleteRequest = async (req, res) => {
       }
     }
     
-    // Build full backup payload from the request row
-    const requestData = request.get ? request.get({ plain: true }) : request.toJSON();
-    const { createdAt, updatedAt, ...cleanRequestData } = requestData;
+    // Since we're using raw: true, the request is already a plain object
+    const { createdAt, updatedAt, ...cleanRequestData } = request;
 
     console.log('Original request data:', {
-      id: cleanRequestData.id,
-      status: cleanRequestData.status,
-      vehicleNumber: cleanRequestData.vehicleNumber
+      id: request.id,
+      status: request.status,
+      vehicleNumber: request.vehicleNumber
     });
 
-    // Ensure the status format is consistent and valid
-    let status = cleanRequestData.status;
-    if (typeof status !== 'string') {
-      status = String(status);
-    }
-    
-    // Remove any special characters from status
-    status = status.replace(/[^\w\s-]/g, '');
-
-    // Prepare the backup data with careful handling of fields
+    // Prepare the backup data
     const backupData = {
-      ...cleanRequestData,
-      id: parseInt(cleanRequestData.id),
-      status: status,
-      vehicleId: parseInt(cleanRequestData.vehicleId),
-      quantity: parseInt(cleanRequestData.quantity),
-      tubesQuantity: parseInt(cleanRequestData.tubesQuantity),
-      presentKmReading: parseInt(cleanRequestData.presentKmReading),
-      previousKmReading: parseInt(cleanRequestData.previousKmReading),
+      id: request.id,
+      userId: request.userId,
+      vehicleId: request.vehicleId,
+      vehicleNumber: request.vehicleNumber,
+      quantity: request.quantity,
+      tubesQuantity: request.tubesQuantity,
+      tireSize: request.tireSize,
+      requestReason: request.requestReason,
+      requesterName: request.requesterName,
+      requesterEmail: request.requesterEmail,
+      requesterPhone: request.requesterPhone,
+      vehicleBrand: request.vehicleBrand,
+      vehicleModel: request.vehicleModel,
+      lastReplacementDate: request.lastReplacementDate,
+      existingTireMake: request.existingTireMake,
+      tireSizeRequired: request.tireSizeRequired,
+      presentKmReading: request.presentKmReading,
+      previousKmReading: request.previousKmReading,
+      tireWearPattern: request.tireWearPattern,
+      comments: request.comments,
+      status: request.status,
+      submittedAt: request.submittedAt,
+      supervisorId: request.supervisorId || null,
       deletedAt: new Date(),
-      deletedBy: userId ? parseInt(userId) : null,
-      Department: cleanRequestData.userSection || cleanRequestData.Department || null,
-      CostCenter: cleanRequestData.costCenter || cleanRequestData.CostCenter || null
+      deletedBy: userId || null,
+      Department: request.userSection || null,
+      CostCenter: request.costCenter || null
     };
 
     console.log('Prepared backup data:', {
@@ -951,24 +961,38 @@ exports.deleteRequest = async (req, res) => {
       console.error('❌ Status field validation error:', statusError);
     }
 
-    // Insert into requestbackup
-    const backupFields = Object.keys(backupData);
-    const backupValues = Object.values(backupData);
-    const placeholders = backupFields.map(() => '?').join(', ');
-    const fieldNames = backupFields.join(', ');
-
-    // Log the specific fields being inserted for Department/CostCenter
-    console.log('🧾 Inserting into requestbackup with Department/CostCenter:', {
-      Department: backupData['Department'],
-      CostCenter: backupData['CostCenter'],
-      deletedBy: backupData['deletedBy'],
-      deletedByRole: backupData['deletedByRole']
+    console.log('Attempting to insert backup with data:', {
+      id: backupData.id,
+      status: backupData.status,
+      vehicleNumber: backupData.vehicleNumber,
+      deletedBy: backupData.deletedBy
     });
 
-    await connection.query(
-      `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
-      backupValues
-    );
+    try {
+      // First ensure the backup table has the correct structure
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS requestbackup LIKE requests;
+      `);
+
+      // Add any missing columns that are specific to backup
+      await connection.query(`
+        ALTER TABLE requestbackup
+        ADD COLUMN IF NOT EXISTS deletedAt DATETIME NULL,
+        ADD COLUMN IF NOT EXISTS deletedBy INT NULL,
+        MODIFY COLUMN status VARCHAR(50);
+      `);
+
+      // Insert into requestbackup using direct column mapping
+      const insertQuery = `
+        INSERT INTO requestbackup SET ?
+      `;
+
+      await connection.query(insertQuery, backupData);
+      console.log('✅ Successfully inserted into requestbackup table');
+    } catch (insertError) {
+      console.error('❌ Error inserting into requestbackup:', insertError);
+      throw insertError;
+    }
     console.log('✅ Request backed up to requestbackup table');
 
     // Get all request images before deletion
