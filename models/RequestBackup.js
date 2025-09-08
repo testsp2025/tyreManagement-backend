@@ -55,7 +55,7 @@ const RequestBackup = sequelize.define(
     customer_officer_note: { type: DataTypes.TEXT },
     supervisorId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,  // Allow null for User Requested tire status which has no supervisor yet
       references: {
         model: "users",
         key: "id",

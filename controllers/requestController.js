@@ -776,6 +776,13 @@ exports.deleteRequest = async (req, res) => {
       await connection.rollback();
       return res.status(404).json({ message: "Request not found" });
     }
+
+    // Convert any 'pending' status to 'User Requested tire' before backup
+    if (request.status === 'pending') {
+      request.status = 'User Requested tire';
+      await request.save();
+      console.log(`✅ Converted 'pending' status to 'User Requested tire' for request ID: ${id}`);
+    }
     
     console.log(`✅ Request found: ${request.id} - ${request.vehicleNumber}`);
     console.log(`🔄 Starting soft delete for request ID: ${id}`);
@@ -798,6 +805,11 @@ exports.deleteRequest = async (req, res) => {
     // Build full backup payload from the request row
     const requestData = request.get ? request.get({ plain: true }) : request.toJSON();
     const { createdAt, updatedAt, ...cleanRequestData } = requestData;
+
+    // Normalize 'pending' status to 'User Requested tire'
+    if (cleanRequestData.status === 'pending') {
+      cleanRequestData.status = 'User Requested tire';
+    }
 
     const backupData = {
       ...cleanRequestData,
