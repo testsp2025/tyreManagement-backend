@@ -477,9 +477,12 @@ exports.checkVehicleRestrictions = async (req, res) => {
     const existingRequests = await Request.findAll({
       where: {
         vehicleNumber: vehicleNumber,
+        // This logic was also incorrect and inconsistent.
         status: {
           [require('sequelize').Op.notIn]: ['rejected', 'complete', 'Engineer Approved', 'order placed']
         }
+          [Op.notIn]: ['complete', 'rejected', 'supervisor rejected', 'technical-manager rejected', 'engineer rejected', 'customer-officer rejected', 'order cancelled']
+        },
       },
       order: [['submittedAt', 'DESC']]
     });
@@ -489,6 +492,7 @@ exports.checkVehicleRestrictions = async (req, res) => {
         restricted: true,
         type: 'pending',
         message: `Vehicle ${vehicleNumber} already has a user requested tire. Please wait for the current request to be processed before submitting a new one.`,
+        message: `Vehicle ${vehicleNumber} already has an active request with status '${existingRequests[0].status}'. Please wait for it to be processed.`,
         existingRequestId: existingRequests[0].id,
         existingRequestStatus: existingRequests[0].status
       });
