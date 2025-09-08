@@ -761,6 +761,14 @@ exports.deleteRequest = async (req, res) => {
     const id = req.params.id;
     const { userId, userRole } = req.body; // Extract both userId and userRole
     
+    console.log('🔍 DELETE REQUEST - Full Details:', {
+      requestId: id,
+      userId: userId,
+      userRole: userRole,
+      body: req.body,
+      headers: req.headers
+    });
+    
     console.log(`🗑️  DELETE REQUEST CALLED - ID: ${id}, UserID: ${userId}, UserRole: ${userRole}`);
     console.log('Request body:', req.body);
     console.log('Request params:', req.params);
@@ -799,20 +807,43 @@ exports.deleteRequest = async (req, res) => {
     const requestData = request.get ? request.get({ plain: true }) : request.toJSON();
     const { createdAt, updatedAt, ...cleanRequestData } = requestData;
 
-    // Ensure the status format is consistent
+    console.log('Original request data:', {
+      id: cleanRequestData.id,
+      status: cleanRequestData.status,
+      vehicleNumber: cleanRequestData.vehicleNumber
+    });
+
+    // Ensure the status format is consistent and valid
     let status = cleanRequestData.status;
     if (typeof status !== 'string') {
       status = String(status);
     }
+    
+    // Remove any special characters from status
+    status = status.replace(/[^\w\s-]/g, '');
 
+    // Prepare the backup data with careful handling of fields
     const backupData = {
       ...cleanRequestData,
+      id: parseInt(cleanRequestData.id),
       status: status,
+      vehicleId: parseInt(cleanRequestData.vehicleId),
+      quantity: parseInt(cleanRequestData.quantity),
+      tubesQuantity: parseInt(cleanRequestData.tubesQuantity),
+      presentKmReading: parseInt(cleanRequestData.presentKmReading),
+      previousKmReading: parseInt(cleanRequestData.previousKmReading),
       deletedAt: new Date(),
-      deletedBy: userId || null,
+      deletedBy: userId ? parseInt(userId) : null,
       Department: cleanRequestData.userSection || cleanRequestData.Department || null,
       CostCenter: cleanRequestData.costCenter || cleanRequestData.CostCenter || null
     };
+
+    console.log('Prepared backup data:', {
+      id: backupData.id,
+      status: backupData.status,
+      vehicleNumber: backupData.vehicleNumber,
+      deletedBy: backupData.deletedBy
+    });
     
     // Only add deletedByRole if the column exists in the database
     try {
@@ -1001,9 +1032,31 @@ exports.deleteRequest = async (req, res) => {
     console.error("❌ Error in soft delete process:", error);
     console.error("Error stack:", error.stack);
     
+    // Log more detailed error information
+    console.error("Detailed error info:", {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      sqlMessage: error.sqlMessage,
+      sqlState: error.sqlState,
+      requestId: req.params.id,
+      userId: req.body.userId,
+      userRole: req.body.userRole
+    });
+
+    let errorMessage = "Failed to delete request";
+    if (error.code === 'ER_DATA_TOO_LONG') {
+      errorMessage = "Status value is too long for the database field";
+    } else if (error.code === 'ER_BAD_NULL_ERROR') {
+      errorMessage = "Required field is missing";
+    } else if (error.sqlMessage) {
+      errorMessage = error.sqlMessage;
+    }
+    
     res.status(500).json({ 
-      error: "Failed to delete request", 
+      error: errorMessage, 
       details: error.message,
+      code: error.code,
       requestId: req.params.id,
       success: false
     });
