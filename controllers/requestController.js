@@ -790,7 +790,8 @@ exports.deleteRequest = async (req, res) => {
           finalUserRole = user.role;
           console.log(`🔍 Retrieved user role from database: ${finalUserRole}`);
         }
-      } catch (userFetchError fetch user role from database:', userFetchError.message);
+      } catch (userFetchError) {
+        console.warn('⚠️ Could not fetch user role from database:', userFetchError.message);
       }
     }
     
