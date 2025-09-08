@@ -54,8 +54,10 @@ const RequestBackup = sequelize.define(
     engineer_note: { type: DataTypes.TEXT },
     customer_officer_note: { type: DataTypes.TEXT },
     supervisorId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
+  type: DataTypes.INTEGER,
+  // Requests in the 'User Requested tire' state may not have an assigned supervisor yet.
+  // Make this nullable so those requests can be backed up and deleted.
+  allowNull: true,
       references: {
         model: "users",
         key: "id",
