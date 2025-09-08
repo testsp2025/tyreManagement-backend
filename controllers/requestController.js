@@ -761,14 +761,6 @@ exports.deleteRequest = async (req, res) => {
     const id = req.params.id;
     const { userId, userRole } = req.body; // Extract both userId and userRole
     
-    console.log('🔍 DELETE REQUEST - Full Details:', {
-      requestId: id,
-      userId: userId,
-      userRole: userRole,
-      body: req.body,
-      headers: req.headers
-    });
-    
     console.log(`🗑️  DELETE REQUEST CALLED - ID: ${id}, UserID: ${userId}, UserRole: ${userRole}`);
     console.log('Request body:', req.body);
     console.log('Request params:', req.params);
@@ -777,12 +769,8 @@ exports.deleteRequest = async (req, res) => {
     await connection.beginTransaction();
     console.log('✅ Transaction started');
     
-    // First, check if the request exists and get it in raw JSON format
-    const request = await Request.findOne({
-      where: { id: id },
-      raw: true
-    });
-
+    // First, check if the request exists
+    const request = await Request.findByPk(id);
     if (!request) {
       console.log(`❌ Request ID ${id} not found`);
       await connection.rollback();
@@ -790,7 +778,6 @@ exports.deleteRequest = async (req, res) => {
     }
     
     console.log(`✅ Request found: ${request.id} - ${request.vehicleNumber}`);
-    console.log(`📊 Request status: ${request.status}`);
     console.log(`🔄 Starting soft delete for request ID: ${id}`);
     
     // If userRole is not provided but userId is, try to fetch it from the database
@@ -808,52 +795,15 @@ exports.deleteRequest = async (req, res) => {
       }
     }
     
-    // Since we're using raw: true, the request is already a plain object
-    const { createdAt, updatedAt, ...cleanRequestData } = request;
+    // Build full backup payload from the request row
+    const requestData = request.get ? request.get({ plain: true }) : request.toJSON();
+    const { createdAt, updatedAt, ...cleanRequestData } = requestData;
 
-    console.log('Original request data:', {
-      id: request.id,
-      status: request.status,
-      vehicleNumber: request.vehicleNumber
-    });
-
-    // Prepare the backup data
     const backupData = {
-      id: request.id,
-      userId: request.userId,
-      vehicleId: request.vehicleId,
-      vehicleNumber: request.vehicleNumber,
-      quantity: request.quantity,
-      tubesQuantity: request.tubesQuantity,
-      tireSize: request.tireSize,
-      requestReason: request.requestReason,
-      requesterName: request.requesterName,
-      requesterEmail: request.requesterEmail,
-      requesterPhone: request.requesterPhone,
-      vehicleBrand: request.vehicleBrand,
-      vehicleModel: request.vehicleModel,
-      lastReplacementDate: request.lastReplacementDate,
-      existingTireMake: request.existingTireMake,
-      tireSizeRequired: request.tireSizeRequired,
-      presentKmReading: request.presentKmReading,
-      previousKmReading: request.previousKmReading,
-      tireWearPattern: request.tireWearPattern,
-      comments: request.comments,
-      status: request.status,
-      submittedAt: request.submittedAt,
-      supervisorId: request.supervisorId || null,
+      ...cleanRequestData,
       deletedAt: new Date(),
       deletedBy: userId || null,
-      Department: request.userSection || null,
-      CostCenter: request.costCenter || null
     };
-
-    console.log('Prepared backup data:', {
-      id: backupData.id,
-      status: backupData.status,
-      vehicleNumber: backupData.vehicleNumber,
-      deletedBy: backupData.deletedBy
-    });
     
     // Only add deletedByRole if the column exists in the database
     try {
@@ -942,57 +892,24 @@ exports.deleteRequest = async (req, res) => {
       }
     }
 
-    // Log the request data for debugging
-    console.log('Request data being backed up:', {
-      id: backupData.id,
-      status: backupData.status,
-      vehicleNumber: backupData.vehicleNumber
+    // Insert into requestbackup
+    const backupFields = Object.keys(backupData);
+    const backupValues = Object.values(backupData);
+    const placeholders = backupFields.map(() => '?').join(', ');
+    const fieldNames = backupFields.join(', ');
+
+    // Log the specific fields being inserted for Department/CostCenter
+    console.log('🧾 Inserting into requestbackup with Department/CostCenter:', {
+      Department: backupData['Department'],
+      CostCenter: backupData['CostCenter'],
+      deletedBy: backupData['deletedBy'],
+      deletedByRole: backupData['deletedByRole']
     });
 
-    // Make sure status is being properly handled
-    try {
-      // Try raw SQL first to see if there's any issue
-      await connection.query(
-        'SELECT status FROM requests WHERE id = ?',
-        [id]
-      );
-      console.log('✅ Status field validated successfully');
-    } catch (statusError) {
-      console.error('❌ Status field validation error:', statusError);
-    }
-
-    console.log('Attempting to insert backup with data:', {
-      id: backupData.id,
-      status: backupData.status,
-      vehicleNumber: backupData.vehicleNumber,
-      deletedBy: backupData.deletedBy
-    });
-
-    try {
-      // First ensure the backup table has the correct structure
-      await connection.query(`
-        CREATE TABLE IF NOT EXISTS requestbackup LIKE requests;
-      `);
-
-      // Add any missing columns that are specific to backup
-      await connection.query(`
-        ALTER TABLE requestbackup
-        ADD COLUMN IF NOT EXISTS deletedAt DATETIME NULL,
-        ADD COLUMN IF NOT EXISTS deletedBy INT NULL,
-        MODIFY COLUMN status VARCHAR(50);
-      `);
-
-      // Insert into requestbackup using direct column mapping
-      const insertQuery = `
-        INSERT INTO requestbackup SET ?
-      `;
-
-      await connection.query(insertQuery, backupData);
-      console.log('✅ Successfully inserted into requestbackup table');
-    } catch (insertError) {
-      console.error('❌ Error inserting into requestbackup:', insertError);
-      throw insertError;
-    }
+    await connection.query(
+      `INSERT INTO requestbackup (${fieldNames}) VALUES (${placeholders})`,
+      backupValues
+    );
     console.log('✅ Request backed up to requestbackup table');
 
     // Get all request images before deletion
@@ -1056,31 +973,9 @@ exports.deleteRequest = async (req, res) => {
     console.error("❌ Error in soft delete process:", error);
     console.error("Error stack:", error.stack);
     
-    // Log more detailed error information
-    console.error("Detailed error info:", {
-      errorName: error.name,
-      errorMessage: error.message,
-      errorCode: error.code,
-      sqlMessage: error.sqlMessage,
-      sqlState: error.sqlState,
-      requestId: req.params.id,
-      userId: req.body.userId,
-      userRole: req.body.userRole
-    });
-
-    let errorMessage = "Failed to delete request";
-    if (error.code === 'ER_DATA_TOO_LONG') {
-      errorMessage = "Status value is too long for the database field";
-    } else if (error.code === 'ER_BAD_NULL_ERROR') {
-      errorMessage = "Required field is missing";
-    } else if (error.sqlMessage) {
-      errorMessage = error.sqlMessage;
-    }
-    
     res.status(500).json({ 
-      error: errorMessage, 
+      error: "Failed to delete request", 
       details: error.message,
-      code: error.code,
       requestId: req.params.id,
       success: false
     });
