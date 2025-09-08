@@ -91,6 +91,7 @@ exports.createRequest = async (req, res) => {
         vehicleNumber: requestData.vehicleNumber,
         status: {
           [require('sequelize').Op.notIn]: ['rejected', 'complete', 'order placed']
+          [Op.notIn]: ['complete', 'rejected', 'supervisor rejected', 'technical-manager rejected', 'engineer rejected', 'customer-officer rejected', 'order cancelled']
         }
       },
       order: [['submittedAt', 'DESC']]
@@ -100,6 +101,7 @@ exports.createRequest = async (req, res) => {
     if (existingRequests.length > 0) {
       return res.status(400).json({
         error: `Vehicle ${requestData.vehicleNumber} already has a user requested tire. Please wait for the current request to be processed before submitting a new one.`,
+        error: `Vehicle ${requestData.vehicleNumber} already has an active request with status '${existingRequests[0].status}'. Please wait for it to be processed.`,
         existingRequestId: existingRequests[0].id,
         existingRequestStatus: existingRequests[0].status
       });
@@ -477,12 +479,10 @@ exports.checkVehicleRestrictions = async (req, res) => {
     const existingRequests = await Request.findAll({
       where: {
         vehicleNumber: vehicleNumber,
-        // This logic was also incorrect and inconsistent.
         status: {
           [require('sequelize').Op.notIn]: ['rejected', 'complete', 'Engineer Approved', 'order placed']
-        }
           [Op.notIn]: ['complete', 'rejected', 'supervisor rejected', 'technical-manager rejected', 'engineer rejected', 'customer-officer rejected', 'order cancelled']
-        },
+        }
       },
       order: [['submittedAt', 'DESC']]
     });
@@ -507,6 +507,7 @@ exports.checkVehicleRestrictions = async (req, res) => {
         vehicleNumber: vehicleNumber,
         status: {
           [require('sequelize').Op.in]: ['complete', 'Engineer Approved', 'order placed']
+          [Op.in]: ['complete', 'order placed']
         },
         submittedAt: {
           [require('sequelize').Op.gte]: thirtyDaysAgo
@@ -688,6 +689,24 @@ exports.placeOrder = async (req, res) => {
          WHERE id = ?`,
         ["order placed", orderNumber, orderNotes, orderNotes, id]
       );
+      
+      // Also save supplier info
+      await pool.query(
+        `UPDATE requests
+         SET supplierName = ?,
+             supplierEmail = ?,
+             supplierPhone = ?,
+             orderPlacedDate = ?
+         WHERE id = ?`,
+        [
+          supplier.name,
+          supplier.email,
+          supplier.phone,
+          orderPlacedDate,
+          id
+        ]
+      );
+
       console.log("Updated request with all columns including order details");
     } catch (error) {
       console.log("Full update failed, trying status only:", error.message);
