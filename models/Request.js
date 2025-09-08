@@ -26,7 +26,7 @@ const Request = sequelize.define(
     comments: { type: DataTypes.TEXT },
     status: {
       type: DataTypes.ENUM(
-        "User Requested tire",
+        "pending",
         "supervisor approved",
         "technical-manager approved",
         "engineer approved",
@@ -42,7 +42,7 @@ const Request = sequelize.define(
         "order placed",
         "order cancelled"
       ),
-      defaultValue: "User Requested tire",
+      defaultValue: "pending",
     },
     submittedAt: { type: DataTypes.DATE, allowNull: false },
     supervisor_notes: { type: DataTypes.TEXT },
