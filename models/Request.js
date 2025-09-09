@@ -27,7 +27,6 @@ const Request = sequelize.define(
     status: {
       type: DataTypes.ENUM(
         "User Requested tire",
-        "pending",
         "supervisor approved",
         "technical-manager approved",
         "engineer approved",

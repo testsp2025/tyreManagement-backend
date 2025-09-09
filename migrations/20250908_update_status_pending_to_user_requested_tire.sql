@@ -6,7 +6,6 @@
 
 -- Step 1: First add the new value to the ENUM
 ALTER TABLE requests MODIFY status ENUM(
-  'pending',
   'User Requested tire',
   'supervisor approved',
   'technical-manager approved',
@@ -66,4 +65,4 @@ ALTER TABLE requestbackup MODIFY status ENUM(
 ) DEFAULT 'User Requested tire';
 
 -- Update any existing 'pending' records in requestbackup table
-UPDATE requestbackup SET status = 'User Requested tire' WHERE status = 'User Requested tire';
+UPDATE requestbackup SET status = 'User Requested tire' WHERE status = 'pending';
