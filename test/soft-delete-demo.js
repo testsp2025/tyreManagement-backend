@@ -25,7 +25,7 @@ const mockRequest = {
   previousKmReading: 30000,
   tireWearPattern: 'Even',
   comments: 'Test request',
-  status: 'pending',
+  status: 'User Requested tire',
   submittedAt: new Date(),
   supervisor_notes: null,
   technical_manager_note: null,

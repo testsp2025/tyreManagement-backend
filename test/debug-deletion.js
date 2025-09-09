@@ -90,7 +90,7 @@ async function debugDeletion() {
         presentKmReading: 10000,
         previousKmReading: 5000,
         tireWearPattern: 'Test Pattern',
-        status: 'pending',
+        status: 'User Requested tire',
         submittedAt: new Date(),
         supervisorId: 1,
         deletedAt: new Date(),

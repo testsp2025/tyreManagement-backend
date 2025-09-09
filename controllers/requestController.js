@@ -90,16 +90,16 @@ exports.createRequest = async (req, res) => {
       where: {
         vehicleNumber: requestData.vehicleNumber,
         status: {
-          [require('sequelize').Op.notIn]: ['rejected', 'complete', 'order placed']
+          [require('sequelize').Op.notIn]: ['rejected', 'complete', 'Engineer Approved', 'order placed']
         }
       },
       order: [['submittedAt', 'DESC']]
     });
 
-    // Check for pending requests
+    // Check for pending requests (User Requested tire status)
     if (existingRequests.length > 0) {
       return res.status(400).json({
-        error: `Vehicle ${requestData.vehicleNumber} already has a pending request. Please wait for the current request to be processed before submitting a new one.`,
+        error: `Vehicle ${requestData.vehicleNumber} already has a User Requested tire request. Please wait for the current request to be processed before submitting a new one.`,
         existingRequestId: existingRequests[0].id,
         existingRequestStatus: existingRequests[0].status
       });
@@ -113,7 +113,7 @@ exports.createRequest = async (req, res) => {
       where: {
         vehicleNumber: requestData.vehicleNumber,
         status: {
-          [require('sequelize').Op.in]: ['complete', 'order placed']
+          [require('sequelize').Op.in]: ['complete', 'Engineer Approved', 'order placed']
         },
         submittedAt: {
           [require('sequelize').Op.gte]: thirtyDaysAgo
@@ -244,7 +244,7 @@ exports.updateRequestStatus = async (req, res) => {
 
     // Allow all valid statuses from your enum
     const allowedStatuses = [
-      "pending",
+      "User Requested tire",
       "supervisor approved",
       "technical-manager approved",
       "engineer approved",
@@ -487,8 +487,8 @@ exports.checkVehicleRestrictions = async (req, res) => {
     if (existingRequests.length > 0) {
       return res.json({
         restricted: true,
-        type: 'pending',
-        message: `Vehicle ${vehicleNumber} already has a pending request. Please wait for the current request to be processed before submitting a new one.`,
+        type: 'User Requested tire',
+        message: `Vehicle ${vehicleNumber} already has a User Requested tire request. Please wait for the current request to be processed before submitting a new one.`,
         existingRequestId: existingRequests[0].id,
         existingRequestStatus: existingRequests[0].status
       });
@@ -1587,5 +1587,11 @@ exports.testBackupCount = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
 
 
