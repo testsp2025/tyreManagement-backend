@@ -1,12 +1,11 @@
--- Migration to update status from 'pending' to 'User Requested tire'
+-- Migration to update status from 'User Requested tire' to 'pending'
 -- This migration will:
--- 1. Add 'User Requested tire' to the ENUM
--- 2. Update all existing 'pending' records to 'User Requested tire'
--- 3. Remove 'pending' from the ENUM
+-- 1. Add 'pending' to the ENUM
+-- 2. Update all existing 'User Requested tire' records to 'pending'
+-- 3. Remove 'User Requested tire' from the ENUM
 
--- Step 1: First add the new value to the ENUM
+-- Step 1: First add the 'pending' value to the ENUM
 ALTER TABLE requests MODIFY status ENUM(
-  'pending',
   'User Requested tire',
   'supervisor approved',
   'technical-manager approved',
@@ -22,12 +21,12 @@ ALTER TABLE requests MODIFY status ENUM(
   'complete',
   'order placed',
   'order cancelled'
-) DEFAULT 'User Requested tire';
+) DEFAULT 'pending';
 
--- Step 2: Update all existing 'pending' records to 'User Requested tire'
-UPDATE requests SET status = 'User Requested tire' WHERE status = 'pending';
+-- Step 2: Update all existing 'User Requested tire' records to 'pending'
+UPDATE requests SET status = 'User Requested tire' WHERE status = 'User Requested tire';
 
--- Step 3: Remove 'pending' from the ENUM and set new default
+-- Step 3: Remove 'User Requested tire' from the ENUM and set new default
 ALTER TABLE requests MODIFY status ENUM(
   'User Requested tire',
   'supervisor approved',
@@ -65,5 +64,5 @@ ALTER TABLE requestbackup MODIFY status ENUM(
   'order cancelled'
 ) DEFAULT 'User Requested tire';
 
--- Update any existing 'pending' records in requestbackup table
+-- Update any existing 'User Requested tire' records in requestbackup table
 UPDATE requestbackup SET status = 'User Requested tire' WHERE status = 'User Requested tire';
