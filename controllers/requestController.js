@@ -24,6 +24,9 @@ exports.createRequest = async (req, res) => {
     requestData.previousKmReading = Number(requestData.previousKmReading);
     requestData.userId = Number(requestData.userId);
 
+    // Set the status to "User Requested tire" instead of defaulting to "pending"
+    requestData.status = "User Requested tire";
+
     // Validate required fields
     const requiredFields = [
       "userId",
@@ -1587,5 +1590,7 @@ exports.testBackupCount = async (req, res) => {
     });
   }
 };
+
+
 
 
