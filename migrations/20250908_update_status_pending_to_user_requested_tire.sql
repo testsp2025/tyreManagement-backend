@@ -66,4 +66,4 @@ ALTER TABLE requestbackup MODIFY status ENUM(
 ) DEFAULT 'User Requested tire';
 
 -- Update any existing 'pending' records in requestbackup table
-UPDATE requestbackup SET status = 'User Requested tire' WHERE status = 'pending';
+UPDATE requestbackup SET status = 'User Requested tire' WHERE status = 'User Requested tire';
