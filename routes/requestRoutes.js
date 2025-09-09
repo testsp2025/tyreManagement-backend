@@ -50,7 +50,7 @@ router.get("/vehicle/:vehicleNumber", requestController.getRequestsByVehicleNumb
 // Update request status
 router.put("/:id/status", requestController.updateRequestStatus);
 
-// Update entire request (for editing pending requests)
+// Update entire request (for editing User Requested tire requests)
 router.put("/:id", requestController.updateRequest);
 
 // Place order for an approved request

@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS requestbackup (
   tireWearPattern VARCHAR(100) NOT NULL,
   comments TEXT,
   status ENUM(
-    'pending',
+    'User Requested tire',
     'supervisor approved',
     'technical-manager approved',
     'engineer approved',
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS requestbackup (
     'complete',
     'order placed',
     'order cancelled'
-  ) DEFAULT 'pending',
+  ) DEFAULT 'User Requested tire',
   submittedAt DATETIME NOT NULL,
   supervisor_notes TEXT,
   technical_manager_note TEXT,
