@@ -169,9 +169,13 @@ ORDER BY r.submittedAt DESC
         });
         const imageUrls = images.map((img) => img.imagePath);
 
+        // Transform 'pending' status to 'User Requested Tire' for display
+        const displayStatus = request.status === 'pending' ? 'User Requested tire' : request.status;
+
         // Only use actual department information, don't add defaults
         const departmentInfo = {
           ...request,
+          status: displayStatus,
           userSection: request.userSection || null,
           costCenter: request.costCenter || null,
           images: imageUrls,
@@ -205,8 +209,11 @@ exports.getRequestById = async (req, res) => {
     // Map image paths to an array of URLs
     const imageUrls = images.map((img) => img.imagePath);
 
+    // Transform 'pending' status to 'User Requested Tire' for display
+    const displayStatus = request.status === 'pending' ? 'User Requested tire' : request.status;
+
     // Add images to the response
-    res.json({ ...request.toJSON(), images: imageUrls });
+    res.json({ ...request.toJSON(), status: displayStatus, images: imageUrls });
   } catch (error) {
     console.error("Error in getRequestById:", error);
     res.status(500).json({ error: "Internal server error" });
