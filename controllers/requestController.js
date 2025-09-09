@@ -176,13 +176,9 @@ ORDER BY r.submittedAt DESC
         });
         const imageUrls = images.map((img) => img.imagePath);
 
-        // Transform 'pending' status to 'User Requested Tire' for display
-        const displayStatus = request.status === 'pending' ? 'User Requested tire' : request.status;
-
         // Only use actual department information, don't add defaults
         const departmentInfo = {
           ...request,
-          status: displayStatus,
           userSection: request.userSection || null,
           costCenter: request.costCenter || null,
           images: imageUrls,
@@ -216,11 +212,8 @@ exports.getRequestById = async (req, res) => {
     // Map image paths to an array of URLs
     const imageUrls = images.map((img) => img.imagePath);
 
-    // Transform 'pending' status to 'User Requested Tire' for display
-    const displayStatus = request.status === 'pending' ? 'User Requested tire' : request.status;
-
     // Add images to the response
-    res.json({ ...request.toJSON(), status: displayStatus, images: imageUrls });
+    res.json({ ...request.toJSON(), images: imageUrls });
   } catch (error) {
     console.error("Error in getRequestById:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -1029,14 +1022,8 @@ exports.getRequestsByVehicleNumber = async (req, res) => {
 
     console.log(`Found ${requests.length} requests for vehicle: ${vehicleNumber}`);
     
-    // Transform 'pending' status to 'User Requested Tire' for display
-    const requestsWithTransformedStatus = requests.map(request => ({
-      ...request,
-      status: request.status === 'pending' ? 'User Requested tire' : request.status
-    }));
-    
     // Return empty array if no requests found
-    if (!requestsWithTransformedStatus || requestsWithTransformedStatus.length === 0) {
+    if (!requests || requests.length === 0) {
       return res.status(200).json({
         success: true,
         data: [],
@@ -1046,8 +1033,8 @@ exports.getRequestsByVehicleNumber = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: requestsWithTransformedStatus,
-      count: requestsWithTransformedStatus.length,
+      data: requests,
+      count: requests.length,
     });
   } catch (error) {
     console.error('Error in getRequestsByVehicleNumber:', {
@@ -1191,17 +1178,14 @@ exports.getDeletedRequests = async (req, res) => {
     console.log(`📊 Found ${deletedRequests[0].length} deleted requests (page ${page} of ${Math.ceil(total / limit)})`);
     console.log(`📊 Total count from database:`, total);
     
-    // Add images to requests - simplified
+    // Process results simply for debugging
     const requestsWithImages = deletedRequests[0].map((request) => {
-      // Transform 'pending' status to 'User Requested Tire' for display
-      const displayStatus = request.status === 'pending' ? 'User Requested tire' : request.status;
-      
       return {
         ...request,
-        status: displayStatus,
         images: [],
         isDeleted: true,
         canRestore: true,
+        deletedByName: request.deletedByName || 'System',
         daysSinceDeleted: request.deletedAt ? Math.floor((new Date() - new Date(request.deletedAt)) / (1000 * 60 * 60 * 24)) : 0
       };
     });
@@ -1543,12 +1527,8 @@ exports.getDeletedRequestById = async (req, res) => {
     );
 
     // Normalize field names for frontend convenience
-    // Transform 'pending' status to 'User Requested Tire' for display
-    const displayStatus = deletedRequest.status === 'pending' ? 'User Requested tire' : deletedRequest.status;
-    
     const response = {
       ...deletedRequest,
-      status: displayStatus,
       images: images.map(i => i.imagePath),
       Department: deletedRequest.Department ?? null,
       CostCenter: deletedRequest.CostCenter ?? null,
@@ -1607,19 +1587,5 @@ exports.testBackupCount = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
