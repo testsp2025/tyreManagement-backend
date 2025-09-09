@@ -219,7 +219,7 @@ exports.updateRequestStatus = async (req, res) => {
 
     // Allow all valid statuses from your enum
     const allowedStatuses = [
-      "pending",
+      "User Requested tire",
       "supervisor approved",
       "technical-manager approved",
       "engineer approved",
