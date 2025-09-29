@@ -13,7 +13,7 @@ async function addRoleColumn() {
     console.log('🚂 Starting Railway role column migration...');
     console.log('📡 Connecting to Railway MySQL database...');
     
-    // Create connection to Railway database
+    // Create connection to Railway 
     connection = await mysql.createConnection({
       host: process.env.DB_HOST || 'mysql.railway.internal',
       user: process.env.DB_USER,
